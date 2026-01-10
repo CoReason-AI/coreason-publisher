@@ -236,3 +236,63 @@ def test_find_large_files_general_exception(git_lfs: GitLFS, tmp_path: Path) -> 
     with patch.object(Path, "rglob", side_effect=Exception("Disk error")):
         with pytest.raises(Exception, match="Disk error"):
             git_lfs.find_large_files(tmp_path, 100)
+
+
+def test_find_large_files_boundary_conditions(git_lfs: GitLFS, tmp_path: Path) -> None:
+    """
+    Test boundary conditions for file size threshold.
+    Files equal to threshold should NOT be included.
+    Files greater than threshold SHOULD be included.
+    """
+    threshold = 100
+
+    # Case 1: Just below threshold (99 bytes)
+    file_below = tmp_path / "below.bin"
+    with open(file_below, "wb") as f:
+        f.write(b"\0" * (threshold - 1))
+
+    # Case 2: Exactly at threshold (100 bytes)
+    file_exact = tmp_path / "exact.bin"
+    with open(file_exact, "wb") as f:
+        f.write(b"\0" * threshold)
+
+    # Case 3: Just above threshold (101 bytes)
+    file_above = tmp_path / "above.bin"
+    with open(file_above, "wb") as f:
+        f.write(b"\0" * (threshold + 1))
+
+    found_files = git_lfs.find_large_files(tmp_path, threshold)
+
+    assert "below.bin" not in found_files
+    assert "exact.bin" not in found_files
+    assert "above.bin" in found_files
+    assert len(found_files) == 1
+
+
+def test_find_large_files_special_characters(git_lfs: GitLFS, tmp_path: Path) -> None:
+    """Test scanning files with spaces, unicode, and other special characters."""
+    # Setup directory structure
+    special_dir = tmp_path / "special_dir"
+    special_dir.mkdir()
+
+    # Define filenames
+    name_spaces = "file with spaces.bin"
+    name_unicode = "café_model.bin"
+    name_brackets = "model_[v1.0].bin"
+
+    # Create files (large enough to be found)
+    threshold = 50
+    size = 100
+
+    for name in [name_spaces, name_unicode, name_brackets]:
+        file_path = special_dir / name
+        with open(file_path, "wb") as f:
+            f.write(b"\0" * size)
+
+    found_files = git_lfs.find_large_files(tmp_path, threshold)
+
+    # Check assertions
+    assert f"special_dir/{name_spaces}" in found_files
+    assert f"special_dir/{name_unicode}" in found_files
+    assert f"special_dir/{name_brackets}" in found_files
+    assert len(found_files) == 3
