@@ -202,3 +202,110 @@ def test_get_merge_request_status_error(provider: GitLabProvider) -> None:
 
     with pytest.raises(RuntimeError, match="Failed to get MR"):
         provider.get_merge_request_status(123)
+
+
+# --- Edge Case & Complex Scenario Tests ---
+
+
+def test_api_unauthorized(provider: GitLabProvider, mock_gitlab: MagicMock) -> None:
+    """Test handling of 401 Unauthorized error."""
+    mock_project = MagicMock()
+    provider._project = mock_project
+    # Simulate 401 on MR creation
+    mock_project.mergerequests.create.side_effect = gitlab.GitlabAuthenticationError(
+        response_code=401, error_message="Unauthorized"
+    )
+
+    # Depending on implementation, this might raise RuntimeError (if wrapped) or the original error
+    # Currently, create_merge_request only catches GitlabCreateError.
+    # GitlabAuthenticationError usually inherits from GitlabError, not GitlabCreateError.
+    # Let's see what happens. If it fails, we fix the code.
+    with pytest.raises(gitlab.GitlabAuthenticationError):
+        provider.create_merge_request("source", "target", "Title", "Desc")
+
+
+def test_create_merge_request_conflict(provider: GitLabProvider) -> None:
+    """Test handling of 409 Conflict (e.g., MR already exists)."""
+    mock_project = MagicMock()
+    provider._project = mock_project
+    # 409 often raises GitlabCreateError in python-gitlab for creation calls
+    mock_project.mergerequests.create.side_effect = gitlab.GitlabCreateError(
+        response_code=409, error_message="Conflict"
+    )
+
+    with pytest.raises(RuntimeError, match="Failed to create MR"):
+        provider.create_merge_request("source", "target", "Title", "Desc")
+
+
+def test_server_error(provider: GitLabProvider) -> None:
+    """Test handling of 500 Server Error."""
+    mock_project = MagicMock()
+    provider._project = mock_project
+    mock_project.mergerequests.create.side_effect = gitlab.GitlabHttpError(
+        response_code=500, error_message="Server Error"
+    )
+
+    with pytest.raises(gitlab.GitlabHttpError):
+        provider.create_merge_request("source", "target", "Title", "Desc")
+
+
+def test_special_characters(provider: GitLabProvider) -> None:
+    """Test that special characters are passed correctly to the API."""
+    mock_project = MagicMock()
+    provider._project = mock_project
+    mock_mr = MagicMock()
+    mock_mr.iid = 999
+    mock_project.mergerequests.create.return_value = mock_mr
+
+    title = 'Title with "quotes" and emojis 🚀'
+    description = "Desc with \n newlines and \t tabs"
+    source = "feat/special-chars"
+    target = "main"
+
+    provider.create_merge_request(source, target, title, description)
+
+    mock_project.mergerequests.create.assert_called_once_with(
+        {
+            "source_branch": source,
+            "target_branch": target,
+            "title": title,
+            "description": description,
+        }
+    )
+
+
+def test_complex_lifecycle_scenario(provider: GitLabProvider) -> None:
+    """
+    Simulate a full MR lifecycle:
+    1. Create MR
+    2. Post Comment
+    3. Check Status
+    4. Merge
+    """
+    mock_project = MagicMock()
+    provider._project = mock_project
+
+    # Setup MR mock
+    mock_mr = MagicMock()
+    mock_mr.iid = 101
+    mock_mr.state = "opened"
+
+    # 1. Create
+    mock_project.mergerequests.create.return_value = mock_mr
+    mr_id = provider.create_merge_request("feat/x", "main", "Feat X", "Desc")
+    assert mr_id == 101
+
+    # Setup Get MR mock for subsequent calls
+    mock_project.mergerequests.get.return_value = mock_mr
+
+    # 2. Post Comment
+    provider.post_comment(mr_id, "LGTM")
+    mock_mr.notes.create.assert_called_once_with({"body": "LGTM"})
+
+    # 3. Check Status
+    status = provider.get_merge_request_status(mr_id)
+    assert status == "opened"
+
+    # 4. Merge
+    provider.merge_merge_request(mr_id)
+    mock_mr.merge.assert_called_once()
