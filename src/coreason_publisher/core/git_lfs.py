@@ -69,6 +69,40 @@ class GitLFS:
             logger.error("Git executable not found")
             raise RuntimeError("Git executable not found") from e
 
+    def find_large_files(self, search_path: Path, threshold_bytes: int) -> List[str]:
+        """
+        Recursively finds files in the search path larger than the threshold.
+
+        Args:
+            search_path: The root directory to search.
+            threshold_bytes: The size threshold in bytes.
+
+        Returns:
+            A list of file paths relative to search_path.
+        """
+        large_files: List[str] = []
+        logger.info(f"Scanning {search_path} for files larger than {threshold_bytes} bytes")
+
+        if not search_path.exists():
+            logger.warning(f"Search path does not exist: {search_path}")
+            return []
+
+        try:
+            for file_path in search_path.rglob("*"):
+                try:
+                    if file_path.is_file() and not file_path.is_symlink():
+                        if file_path.stat().st_size > threshold_bytes:
+                            # Use relative path for cleaner tracking
+                            relative_path = file_path.relative_to(search_path).as_posix()
+                            large_files.append(relative_path)
+                except OSError as e:
+                    logger.warning(f"Could not check file size for {file_path}: {e}")
+        except Exception as e:
+            logger.error(f"Error during large file scan: {e}")
+            raise
+
+        return large_files
+
     def track_patterns(self, repo_path: Path, patterns: List[str]) -> None:
         """Tracks the given file patterns using git-lfs."""
         if not patterns:
