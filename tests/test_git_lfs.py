@@ -144,3 +144,95 @@ def test_track_patterns_git_executable_missing(git_lfs: GitLFS, tmp_path: Path) 
     with patch("subprocess.run", side_effect=FileNotFoundError):
         with pytest.raises(RuntimeError, match="Git executable not found"):
             git_lfs.track_patterns(tmp_path, patterns)
+
+
+def test_find_large_files_mixed(git_lfs: GitLFS, tmp_path: Path) -> None:
+    """Test identifying files larger than threshold."""
+    # Create test files
+    (tmp_path / "small.txt").write_text("small")
+
+    large_file = tmp_path / "large.bin"
+    # Write 1024 bytes
+    with open(large_file, "wb") as f:
+        f.write(b"\0" * 1024)
+
+    nested_dir = tmp_path / "subdir"
+    nested_dir.mkdir()
+    (nested_dir / "nested_small.txt").write_text("small")
+
+    nested_large = nested_dir / "nested_large.bin"
+    with open(nested_large, "wb") as f:
+        f.write(b"\0" * 2048)
+
+    # Threshold 500 bytes. Should find large.bin and nested_large.bin
+    found_files = git_lfs.find_large_files(tmp_path, 500)
+
+    assert len(found_files) == 2
+    assert "large.bin" in found_files
+    assert "subdir/nested_large.bin" in found_files
+
+
+def test_find_large_files_none(git_lfs: GitLFS, tmp_path: Path) -> None:
+    """Test finding no files when all are small."""
+    (tmp_path / "small.txt").write_text("small")
+    found_files = git_lfs.find_large_files(tmp_path, 1000)
+    assert found_files == []
+
+
+def test_find_large_files_empty_dir(git_lfs: GitLFS, tmp_path: Path) -> None:
+    """Test scanning empty directory."""
+    found_files = git_lfs.find_large_files(tmp_path, 100)
+    assert found_files == []
+
+
+def test_find_large_files_missing_path(git_lfs: GitLFS, tmp_path: Path) -> None:
+    """Test scanning a non-existent path."""
+    found_files = git_lfs.find_large_files(tmp_path / "missing", 100)
+    assert found_files == []
+
+
+def test_find_large_files_symlink(git_lfs: GitLFS, tmp_path: Path) -> None:
+    """Test that symlinks are ignored."""
+    target = tmp_path / "target.bin"
+    with open(target, "wb") as f:
+        f.write(b"\0" * 1024)
+
+    link = tmp_path / "link.bin"
+    try:
+        link.symlink_to(target)
+    except OSError:
+        pytest.skip("Symlinks not supported on this OS")
+
+    # If we scan, we should find target.bin. If we counted link, we'd have duplicates or errors.
+    # The code explicitly ignores symlinks.
+    found_files = git_lfs.find_large_files(tmp_path, 500)
+    assert "target.bin" in found_files
+    assert "link.bin" not in found_files
+
+
+def test_find_large_files_oserror_on_stat(git_lfs: GitLFS, tmp_path: Path) -> None:
+    """Test handling of OSError when checking file size."""
+    (tmp_path / "normal.txt").write_text("normal")
+
+    # We need to mock stat() to raise OSError for one file but work for others if needed
+    # Since rglob returns Path objects, we need to patch Path.stat or the iterator
+
+    # Let's mock rglob to return a mock object that raises OSError on stat
+    mock_path = MagicMock(spec=Path)
+    mock_path.is_file.return_value = True
+    mock_path.is_symlink.return_value = False
+    mock_path.stat.side_effect = OSError("Permission denied")
+    # Mypy complains about assigning to return_value of __str__
+    mock_path.__str__.return_value = str(tmp_path / "protected.bin")  # type: ignore[attr-defined]
+
+    with patch.object(Path, "rglob", return_value=[mock_path]):
+        # Should catch OSError and log warning, returning empty list (or list of successful ones)
+        found_files = git_lfs.find_large_files(tmp_path, 100)
+        assert found_files == []
+
+
+def test_find_large_files_general_exception(git_lfs: GitLFS, tmp_path: Path) -> None:
+    """Test handling of general exception during scan."""
+    with patch.object(Path, "rglob", side_effect=Exception("Disk error")):
+        with pytest.raises(Exception, match="Disk error"):
+            git_lfs.find_large_files(tmp_path, 100)
