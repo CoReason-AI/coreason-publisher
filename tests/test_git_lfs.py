@@ -108,3 +108,39 @@ def test_track_patterns_failure(git_lfs: GitLFS, tmp_path: Path) -> None:
     with patch("subprocess.run", side_effect=subprocess.CalledProcessError(1, "cmd", stderr="error")):
         with pytest.raises(RuntimeError, match="Failed to track patterns"):
             git_lfs.track_patterns(tmp_path, patterns)
+
+
+# --- Edge Case Tests ---
+
+
+def test_track_patterns_special_characters(git_lfs: GitLFS, tmp_path: Path) -> None:
+    """Test that special characters (spaces, glob patterns) are handled correctly."""
+    patterns = ["file with spaces.bin", "model_v1[a-z].pt", "'quoted'.txt"]
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0)
+        git_lfs.track_patterns(tmp_path, patterns)
+
+        # Verify the list arguments passed to subprocess (no shell escaping needed)
+        expected_cmd = ["git", "lfs", "track", "file with spaces.bin", "model_v1[a-z].pt", "'quoted'.txt"]
+        mock_run.assert_called_once_with(
+            expected_cmd,
+            cwd=tmp_path,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+
+def test_initialize_git_executable_missing(git_lfs: GitLFS, tmp_path: Path) -> None:
+    """Test that FileNotFoundError from subprocess (missing git) is caught and raised as RuntimeError."""
+    with patch("subprocess.run", side_effect=FileNotFoundError):
+        with pytest.raises(RuntimeError, match="Git executable not found"):
+            git_lfs.initialize(tmp_path)
+
+
+def test_track_patterns_git_executable_missing(git_lfs: GitLFS, tmp_path: Path) -> None:
+    """Test that FileNotFoundError from subprocess (missing git) is caught and raised as RuntimeError."""
+    patterns = ["*.bin"]
+    with patch("subprocess.run", side_effect=FileNotFoundError):
+        with pytest.raises(RuntimeError, match="Git executable not found"):
+            git_lfs.track_patterns(tmp_path, patterns)

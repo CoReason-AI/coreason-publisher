@@ -65,6 +65,9 @@ class GitLFS:
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to initialize Git LFS: {e.stderr}")
             raise RuntimeError(f"Failed to initialize Git LFS: {e.stderr}") from e
+        except FileNotFoundError as e:
+            logger.error("Git executable not found")
+            raise RuntimeError("Git executable not found") from e
 
     def track_patterns(self, repo_path: Path, patterns: List[str]) -> None:
         """Tracks the given file patterns using git-lfs."""
@@ -84,3 +87,6 @@ class GitLFS:
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to track patterns: {e.stderr}")
             raise RuntimeError(f"Failed to track patterns: {e.stderr}") from e
+        except FileNotFoundError as e:
+            logger.error("Git executable not found")
+            raise RuntimeError("Git executable not found") from e
