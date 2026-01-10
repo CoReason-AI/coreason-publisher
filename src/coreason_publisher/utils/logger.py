@@ -11,29 +11,44 @@
 import sys
 from pathlib import Path
 
-from loguru import logger
+from loguru import logger as loguru_logger
 
-# Remove default handler
-logger.remove()
 
-# Sink 1: Stdout (Human-readable)
-logger.add(
-    sys.stderr,
-    level="INFO",
-    format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
-)
+def configure_logging() -> None:
+    """Configures the loguru logger with console and file sinks."""
+    # Remove default handler
+    loguru_logger.remove()
 
-# Ensure logs directory exists
-log_path = Path("logs")
-if not log_path.exists():
-    log_path.mkdir(parents=True, exist_ok=True)
+    # Sink 1: Stdout (Human-readable)
+    loguru_logger.add(
+        sys.stderr,
+        level="INFO",
+        format=(
+            "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
+            "<level>{level: <8}</level> | "
+            "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
+            "<level>{message}</level>"
+        ),
+    )
 
-# Sink 2: File (JSON, Rotation, Retention)
-logger.add(
-    "logs/app.log",
-    rotation="500 MB",
-    retention="10 days",
-    serialize=True,
-    enqueue=True,
-    level="INFO",
-)
+    # Ensure logs directory exists
+    log_path = Path("logs")
+    if not log_path.exists():
+        log_path.mkdir(parents=True, exist_ok=True)
+
+    # Sink 2: File (JSON, Rotation, Retention)
+    loguru_logger.add(
+        "logs/app.log",
+        rotation="500 MB",
+        retention="10 days",
+        serialize=True,
+        enqueue=True,
+        level="INFO",
+    )
+
+
+# Configure logger on import
+configure_logging()
+
+# Export logger
+logger = loguru_logger

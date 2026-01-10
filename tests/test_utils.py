@@ -8,27 +8,47 @@
 #
 # Source Code: https://github.com/CoReason-AI/coreason_publisher
 
-import os
-from pathlib import Path
-from unittest.mock import patch, MagicMock
-from coreason_publisher.utils.logger import logger
+from unittest.mock import MagicMock, patch
 
-def test_logger_initialization():
-    """Test that the logger is initialized correctly and creates the log directory."""
-    # Since the logger is initialized on import, we check side effects
+from coreason_publisher.utils.logger import configure_logging
 
-    # Check if logs directory creation is handled
-    # Note: running this test might actually create the directory in the test environment
-    # if it doesn't exist.
 
-    log_path = Path("logs")
-    assert log_path.exists()
-    assert log_path.is_dir()
+def test_logger_mkdir_called() -> None:
+    """
+    Ensure that `configure_logging()` calls mkdir() when the logs directory doesn't exist.
+    """
+    # Use patch context manager to patch Path in coreason_publisher.utils.logger
+    # Since we are not reloading, we need to make sure we patch the object that the module uses.
+    # The module does `from pathlib import Path`. So we need to patch `coreason_publisher.utils.logger.Path`.
 
-    # Verify app.log creation if it was logged to (it might be empty or not created until log)
-    # logger.info("Test log")
-    # assert (log_path / "app.log").exists()
+    with patch("coreason_publisher.utils.logger.Path") as mock_path_cls:
+        # Configure the mock instance returned by Path("logs")
+        mock_path_instance = MagicMock()
+        mock_path_cls.return_value = mock_path_instance
 
-def test_logger_exports():
-    """Test that logger is exported."""
-    assert logger is not None
+        # Scenario: .exists() returns False
+        mock_path_instance.exists.return_value = False
+
+        # Call the function directly
+        configure_logging()
+
+        # Verify mkdir was called
+        mock_path_instance.mkdir.assert_called_with(parents=True, exist_ok=True)
+
+
+def test_logger_mkdir_not_called() -> None:
+    """
+    Ensure that `configure_logging()` does NOT call mkdir() when the logs directory exists.
+    """
+    with patch("coreason_publisher.utils.logger.Path") as mock_path_cls:
+        mock_path_instance = MagicMock()
+        mock_path_cls.return_value = mock_path_instance
+
+        # Scenario: .exists() returns True
+        mock_path_instance.exists.return_value = True
+
+        # Call the function directly
+        configure_logging()
+
+        # Verify mkdir was NOT called
+        mock_path_instance.mkdir.assert_not_called()
