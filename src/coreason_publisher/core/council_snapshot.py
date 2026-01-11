@@ -49,6 +49,10 @@ class CouncilSnapshot:
 
         council_data = data["council"]
 
+        if not isinstance(council_data, dict):
+            logger.error(f"Assay report 'council' section must be a dictionary, got {type(council_data).__name__}")
+            raise ValueError(f"Assay report 'council' section must be a dictionary, got {type(council_data).__name__}")
+
         try:
             with open(output_path, "w", encoding="utf-8") as f:
                 json.dump(council_data, f, indent=2, sort_keys=True)
