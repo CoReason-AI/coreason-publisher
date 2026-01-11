@@ -95,3 +95,61 @@ def test_render_template_failure(generator: CertificateGenerator, valid_report: 
 
         with pytest.raises(RuntimeError, match="Failed to render template: Render error"):
             generator.generate(valid_report)
+
+
+# --- Edge Case & Complex Scenario Tests ---
+
+
+def test_generate_complex_characters(generator: CertificateGenerator) -> None:
+    """Test generation with Unicode and special characters that might break Markdown tables."""
+    report = {
+        "council": {
+            "proposer": "gpt-4 | version-2",  # Contains pipe
+            "judge": "claude-3 🤖",  # Contains emoji
+            "reviewer": "Dr. O'Neil & Sons",  # Contains special chars
+        },
+        "results": {"pass": True, "score": 100.0},
+    }
+    cert = generator.generate(report)
+
+    # Check that content is present
+    assert "gpt-4 | version-2" in cert
+    assert "claude-3 🤖" in cert
+    assert "Dr. O'Neil & Sons" in cert
+
+    # Note: If we don't escape pipes, this test might pass but the Markdown would be broken.
+    # We should verify if we want to enforce escaping.
+    # For now, let's just ensure it generates without error and contains the string.
+
+
+def test_generate_large_council(generator: CertificateGenerator) -> None:
+    """Test with a large number of council members."""
+    council = {f"role_{i}": f"model_{i}" for i in range(50)}
+    report = {"council": council, "results": {"pass": True, "score": 99.9}}
+    cert = generator.generate(report)
+
+    assert "| role_0 | model_0 |" in cert
+    assert "| role_49 | model_49 |" in cert
+
+
+def test_generate_boundary_scores(generator: CertificateGenerator) -> None:
+    """Test with boundary score values."""
+    report_zero = {"council": {"a": "b"}, "results": {"pass": False, "score": 0.0}}
+    cert_zero = generator.generate(report_zero)
+    assert "**Score:** 0.0" in cert_zero
+
+    report_neg = {"council": {"a": "b"}, "results": {"pass": False, "score": -1.5}}
+    cert_neg = generator.generate(report_neg)
+    assert "**Score:** -1.5" in cert_neg
+
+
+def test_generate_extra_fields(generator: CertificateGenerator, valid_report: Dict[str, Any]) -> None:
+    """Test with extra ignored fields in the input."""
+    valid_report["extra_field"] = "ignore me"
+    valid_report["council"]["extra_role_data"] = {"meta": "data"}  # This might be rendered as string
+
+    cert = generator.generate(valid_report)
+    assert "PASSED" in cert
+    # extra_role_data is in council dict, so it will be iterated.
+    # It will render as key: extra_role_data, value: {'meta': 'data'}
+    assert "| extra_role_data | {'meta': 'data'} |" in cert
