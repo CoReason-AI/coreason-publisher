@@ -34,6 +34,8 @@ class TestVersionManager:
         assert version_manager.calculate_next_version(None, BumpType.MINOR) == "v0.1.0"
         assert version_manager.calculate_next_version(None, BumpType.MAJOR) == "v0.1.0"
         assert version_manager.calculate_next_version(None, BumpType.PATCH) == "v0.1.0"
+        # Empty string should also default
+        assert version_manager.calculate_next_version("", BumpType.PATCH) == "v0.1.0"
 
     def test_calculate_next_version_patch(self, version_manager: VersionManager) -> None:
         assert version_manager.calculate_next_version("v1.0.0", BumpType.PATCH) == "v1.0.1"
@@ -48,8 +50,24 @@ class TestVersionManager:
         assert version_manager.calculate_next_version("0.1.0", BumpType.MAJOR) == "v1.0.0"
 
     def test_calculate_next_version_invalid(self, version_manager: VersionManager) -> None:
-        with pytest.raises(ValueError):
-            version_manager.calculate_next_version("invalid", BumpType.PATCH)
+        """Test that invalid version formats raise ValueError."""
+        invalid_versions = [
+            "invalid",
+            "v1.0",  # Missing patch
+            "1",  # Missing minor/patch
+            "v1.0.0-beta",  # Non-integer components (basic implementation limitation)
+            "v1.0.a",
+        ]
+        for v in invalid_versions:
+            with pytest.raises(ValueError):
+                version_manager.calculate_next_version(v, BumpType.PATCH)
+
+    def test_calculate_next_version_large_numbers(self, version_manager: VersionManager) -> None:
+        """Test bumping with large version numbers."""
+        assert version_manager.calculate_next_version("v99.99.99", BumpType.PATCH) == "v99.99.100"
+        assert version_manager.calculate_next_version("v99.99.99", BumpType.MINOR) == "v99.100.0"
+        assert version_manager.calculate_next_version("v99.99.99", BumpType.MAJOR) == "v100.0.0"
+        assert version_manager.calculate_next_version("v2023.12.31", BumpType.PATCH) == "v2023.12.32"
 
     def test_get_current_version_tags(
         self, version_manager: VersionManager, mock_git_provider: MagicMock, tmp_path: Path
@@ -163,3 +181,48 @@ class TestVersionManager:
         content = changelog.read_text()
         assert "# Title" in content
         assert "## [0.2.0] -" in content
+
+    def test_update_agent_yaml_complex_format(self, version_manager: VersionManager, tmp_path: Path) -> None:
+        """Test updating agent.yaml with comments and weird spacing."""
+        agent_yaml = tmp_path / "agent.yaml"
+        # Spacing, comments, surrounding keys
+        content = """
+name: "my-agent"
+# This is the version
+version:    "1.0.0"   # Current version used in prod
+description: "Fancy Agent"
+"""
+        agent_yaml.write_text(content, encoding="utf-8")
+
+        version_manager.update_files(tmp_path, "v1.1.0")
+
+        new_content = agent_yaml.read_text()
+
+        # Verify version updated
+        assert 'version:    "1.1.0"' in new_content
+        # Verify comment preserved (it's outside the match group 4 if spacing is there)
+        assert "# Current version used in prod" in new_content
+        # Verify other keys preserved
+        assert 'name: "my-agent"' in new_content
+
+    def test_update_changelog_weird_structure(self, version_manager: VersionManager, tmp_path: Path) -> None:
+        """Test updating changelog with weird structure."""
+        changelog = tmp_path / "CHANGELOG.md"
+        # Case where "## [" exists but not at start of line or something weird?
+        # Or standard but messy.
+        content = """# Changelog
+This is a changelog.
+
+## [1.0.0] - 2023-01-01
+- First release
+
+Random text
+"""
+        changelog.write_text(content, encoding="utf-8")
+
+        version_manager.update_files(tmp_path, "v1.1.0")
+
+        new_content = changelog.read_text()
+        # Should insert before ## [1.0.0]
+        assert "## [1.1.0] -" in new_content
+        assert new_content.find("## [1.1.0]") < new_content.find("## [1.0.0]")
