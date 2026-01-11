@@ -8,7 +8,9 @@
 #
 # Source Code: https://github.com/CoReason-AI/coreason_publisher
 
+import json
 import os
+import urllib.parse
 from typing import Any, Dict
 
 import httpx
@@ -39,6 +41,9 @@ class HttpAssayClient(AssayClient):
             logger.error("ASSAY_API_TOKEN not set")
             raise ValueError("ASSAY_API_TOKEN environment variable not set")
 
+        # Normalize base_url to not have a trailing slash for easier concatenation
+        self.base_url = self.base_url.rstrip("/")
+
     def get_latest_report(self, project_id: str) -> Dict[str, Any]:
         """
         Retrieves the latest passing assay report for the given project.
@@ -52,7 +57,9 @@ class HttpAssayClient(AssayClient):
         Raises:
             RuntimeError: If the report cannot be retrieved.
         """
-        url = f"{self.base_url}/projects/{project_id}/reports/latest"
+        # Encode the project_id to handle special characters (e.g., slash in "namespace/project")
+        encoded_project_id = urllib.parse.quote(project_id, safe="")
+        url = f"{self.base_url}/projects/{encoded_project_id}/reports/latest"
         logger.info(f"Fetching latest assay report from {url}")
 
         headers = {
@@ -64,10 +71,23 @@ class HttpAssayClient(AssayClient):
             with httpx.Client() as client:
                 response = client.get(url, headers=headers, timeout=30.0)
                 response.raise_for_status()
-                data: Dict[str, Any] = response.json()
+
+                try:
+                    data = response.json()
+                except json.JSONDecodeError as e:
+                    logger.error(f"Invalid JSON response: {response.text[:200]}")
+                    raise RuntimeError("Invalid JSON response from server") from e
+
+                if not isinstance(data, dict):
+                    logger.error(f"Unexpected response format: expected dict, got {type(data)}")
+                    raise RuntimeError(f"Unexpected response format: expected dict, got {type(data).__name__}")
+
                 logger.info("Successfully retrieved assay report")
                 return data
 
+        except httpx.TimeoutException as e:
+            logger.error(f"Timeout retrieving report: {e}")
+            raise RuntimeError("Timeout retrieving assay report") from e
         except httpx.HTTPStatusError as e:
             logger.error(f"HTTP error retrieving report: {e.response.status_code} - {e.response.text}")
             raise RuntimeError(f"Failed to retrieve assay report: {e.response.status_code}") from e
@@ -75,5 +95,8 @@ class HttpAssayClient(AssayClient):
             logger.error(f"Network error retrieving report: {e}")
             raise RuntimeError(f"Network error retrieving report: {e}") from e
         except Exception as e:
+            # Re-raise RuntimeErrors we created above to avoid wrapping them again in the catch-all
+            if isinstance(e, RuntimeError):
+                raise
             logger.error(f"Unexpected error retrieving report: {e}")
             raise RuntimeError(f"Unexpected error retrieving report: {e}") from e

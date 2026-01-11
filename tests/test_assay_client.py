@@ -106,3 +106,73 @@ def test_get_latest_report_unexpected_error(mock_env: None) -> None:
         client = HttpAssayClient()
         with pytest.raises(RuntimeError, match="Unexpected error retrieving report"):
             client.get_latest_report(project_id)
+
+
+def test_get_latest_report_timeout(mock_env: None) -> None:
+    """Test retrieval when request times out."""
+    project_id = "test-project"
+
+    with respx.mock(base_url="https://api.assay.coreason.ai") as respx_mock:
+        respx_mock.get(f"/projects/{project_id}/reports/latest").mock(side_effect=httpx.TimeoutException("Timeout"))
+
+        client = HttpAssayClient()
+        with pytest.raises(RuntimeError, match="Timeout retrieving assay report"):
+            client.get_latest_report(project_id)
+
+
+def test_get_latest_report_invalid_json(mock_env: None) -> None:
+    """Test retrieval when server returns invalid JSON."""
+    project_id = "test-project"
+
+    with respx.mock(base_url="https://api.assay.coreason.ai") as respx_mock:
+        respx_mock.get(f"/projects/{project_id}/reports/latest").mock(return_value=httpx.Response(200, text="Not JSON"))
+
+        client = HttpAssayClient()
+        with pytest.raises(RuntimeError, match="Invalid JSON response from server"):
+            client.get_latest_report(project_id)
+
+
+def test_get_latest_report_non_dict_response(mock_env: None) -> None:
+    """Test retrieval when server returns a JSON list instead of a dict."""
+    project_id = "test-project"
+
+    with respx.mock(base_url="https://api.assay.coreason.ai") as respx_mock:
+        respx_mock.get(f"/projects/{project_id}/reports/latest").mock(
+            return_value=httpx.Response(200, json=[{"id": "1"}])
+        )
+
+        client = HttpAssayClient()
+        with pytest.raises(RuntimeError, match="Unexpected response format: expected dict, got list"):
+            client.get_latest_report(project_id)
+
+
+def test_get_latest_report_url_construction(mock_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test correct URL construction with trailing slashes."""
+    project_id = "test-project"
+
+    # Test with trailing slash in env var
+    monkeypatch.setenv("ASSAY_API_URL", "https://api.assay.coreason.ai/")
+
+    client = HttpAssayClient()
+    # Check internal base_url attribute is stripped
+    assert client.base_url == "https://api.assay.coreason.ai"
+
+    with respx.mock(base_url="https://api.assay.coreason.ai") as respx_mock:
+        route = respx_mock.get(f"/projects/{project_id}/reports/latest").mock(return_value=httpx.Response(200, json={}))
+
+        client.get_latest_report(project_id)
+        assert route.called
+
+
+def test_get_latest_report_special_chars_project_id(mock_env: None) -> None:
+    """Test that project ID is URL-encoded."""
+    project_id = "group/subgroup/project"
+    encoded_id = "group%2Fsubgroup%2Fproject"
+
+    with respx.mock(base_url="https://api.assay.coreason.ai") as respx_mock:
+        # Expect the encoded URL
+        route = respx_mock.get(f"/projects/{encoded_id}/reports/latest").mock(return_value=httpx.Response(200, json={}))
+
+        client = HttpAssayClient()
+        client.get_latest_report(project_id)
+        assert route.called
