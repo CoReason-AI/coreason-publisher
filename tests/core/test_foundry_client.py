@@ -205,3 +205,67 @@ def test_get_draft_status_runtime_error_reraise(client: HttpFoundryClient) -> No
 
     with pytest.raises(RuntimeError, match="Invalid JSON response"):
         client.get_draft_status(draft_id)
+
+
+# --- Edge Cases and Complex Scenarios ---
+
+
+@respx.mock  # type: ignore[misc]
+def test_url_encoding(client: HttpFoundryClient) -> None:
+    """Test that draft IDs with special characters are correctly encoded."""
+    draft_id = "group/project/draft#1"
+    # Expected encoding: group%2Fproject%2Fdraft%231
+    expected_path = "/drafts/group%2Fproject%2Fdraft%231/submit"
+
+    route = respx.post(f"https://api.foundry.com{expected_path}").mock(
+        return_value=Response(200, json={"message": "ok"})
+    )
+
+    client.submit_for_review(draft_id, "minor")
+
+    assert route.called
+    # httpx.URL.path returns decoded path. We need to check raw_path to verify encoding.
+    # raw_path is bytes.
+    assert route.calls.last.request.url.raw_path == expected_path.encode()
+
+
+def test_malformed_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that a malformed base URL raises a proper error when used."""
+    monkeypatch.setenv("FOUNDRY_API_URL", "invalid-url-without-scheme")
+    monkeypatch.setenv("FOUNDRY_API_TOKEN", "test-token")
+    client = HttpFoundryClient()  # Should not raise here
+
+    # httpx raises UnsupportedProtocol for missing scheme
+    with pytest.raises(RuntimeError, match="Network error during Foundry API call"):
+        client.get_draft_status("123")
+
+
+@respx.mock  # type: ignore[misc]
+def test_status_type_conversion(client: HttpFoundryClient) -> None:
+    """Test handling of non-string status values."""
+    draft_id = "123"
+
+    # Int status
+    respx.get(f"https://api.foundry.com/drafts/{draft_id}").mock(
+        return_value=Response(200, json={"id": draft_id, "status": 123})
+    )
+    assert client.get_draft_status(draft_id) == "123"
+
+    # None status
+    respx.get(f"https://api.foundry.com/drafts/{draft_id}").mock(
+        return_value=Response(200, json={"id": draft_id, "status": None})
+    )
+    assert client.get_draft_status(draft_id) == "None"
+
+
+@respx.mock  # type: ignore[misc]
+def test_empty_arguments(client: HttpFoundryClient) -> None:
+    """Test calling methods with empty strings."""
+    draft_id = ""
+    # urllib.parse.quote("") is ""
+    # Path becomes /drafts//submit
+
+    respx.post("https://api.foundry.com/drafts//submit").mock(return_value=Response(404, json={"error": "Not Found"}))
+
+    with pytest.raises(RuntimeError, match="Foundry API error: 404"):
+        client.submit_for_review(draft_id, "minor")
