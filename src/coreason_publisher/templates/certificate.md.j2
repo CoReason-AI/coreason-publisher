@@ -1,0 +1,18 @@
+# Certificate of Analysis
+
+**Status:** {{ status }}
+**Timestamp:** {{ timestamp }}
+
+## Executive Summary
+This document certifies the validation results for the release candidate.
+
+## Council Manifest
+| Role | Model |
+|------|-------|
+{% for role, model in council.items() %}
+| {{ role }} | {{ model }} |
+{% endfor %}
+
+## Validation Evidence
+* **Score:** {{ results.score }}
+* **Pass:** {{ results.pass }}
