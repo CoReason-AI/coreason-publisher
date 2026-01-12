@@ -82,11 +82,7 @@ class GitLFS:
         try:
             # Get git directory (usually .git)
             git_dir_proc = subprocess.run(
-                ["git", "rev-parse", "--git-dir"],
-                cwd=repo_path,
-                capture_output=True,
-                text=True,
-                check=True,
+                ["git", "rev-parse", "--git-dir"], cwd=repo_path, capture_output=True, text=True, check=True
             )
             git_dir = Path(repo_path) / git_dir_proc.stdout.strip()
             # If absolute path returned, Path / absolute -> absolute, so safe.
