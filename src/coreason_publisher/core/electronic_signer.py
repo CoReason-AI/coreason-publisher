@@ -57,8 +57,9 @@ class ElectronicSigner:
 
             files_to_hash.append(file_path)
 
-        # Sort strictly by relative path string to ensure determinism
-        files_to_hash.sort(key=lambda p: str(p.relative_to(bundle_path)))
+        # Sort strictly by normalized relative path string to ensure determinism across platforms
+        # We replace backslashes with forward slashes BEFORE sorting to ensure consistency
+        files_to_hash.sort(key=lambda p: str(p.relative_to(bundle_path)).replace("\\", "/"))
 
         logger.info(f"Hashing {len(files_to_hash)} files in {bundle_path}")
 
