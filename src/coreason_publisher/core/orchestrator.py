@@ -10,7 +10,6 @@
 
 import json
 from pathlib import Path
-from typing import Optional
 
 from coreason_publisher.core.artifact_bundler import ArtifactBundler
 from coreason_publisher.core.assay_client import AssayClient
@@ -135,10 +134,7 @@ class PublisherOrchestrator:
 
         try:
             mr_id = self.git_provider.create_merge_request(
-                source_branch=candidate_branch,
-                target_branch=target_branch,
-                title=mr_title,
-                description=mr_description
+                source_branch=candidate_branch, target_branch=target_branch, title=mr_title, description=mr_description
             )
         except RuntimeError:
             # If MR creation fails, we should probably warn but the branch is pushed.
@@ -158,3 +154,42 @@ class PublisherOrchestrator:
         self.git_provider.post_comment(mr_id, f"Linked Foundry Draft: {foundry_draft_id}")
 
         logger.info(f"Release proposal completed. MR: {mr_id}, Version: {next_version}")
+
+    def finalize_release(self, mr_id: int, srb_signature: str) -> None:
+        """
+        Orchestrates the 'Release' phase.
+
+        1. Verifies the SRB signature against the current workspace (candidate bundle).
+        2. Merges the MR to main.
+        3. Creates the Git Tag on main.
+        4. Unlocks Foundry (Approve Release).
+
+        Args:
+            mr_id: The Merge Request ID.
+            srb_signature: The cryptographic signature provided by the SRB.
+        """
+        logger.info(f"Finalizing release for MR {mr_id}")
+
+        # 1. Verify Signature
+        if not self.electronic_signer.verify_signature(self.workspace_path, srb_signature):
+            logger.error("Signature verification failed! Release aborted.")
+            raise ValueError("Signature verification failed. The artifact does not match the SRB signature.")
+
+        # 2. Get Version for Tag
+        # We assume the workspace is currently on the candidate branch
+        current_version = self.version_manager.get_current_version(self.workspace_path)
+        if not current_version:
+            raise RuntimeError("Could not determine version from workspace.")
+
+        # 3. Merge MR
+        # We assume target is main.
+        self.git_provider.merge_merge_request(mr_id)
+
+        # 4. Create Tag
+        # Tagging 'main' assuming the merge moved main forward.
+        self.git_provider.create_tag(tag_name=current_version, ref="main", message=f"Release {current_version}")
+
+        # 5. Notify Foundry
+        self.foundry_client.approve_release(mr_id, srb_signature)
+
+        logger.info(f"Release {current_version} finalized successfully.")

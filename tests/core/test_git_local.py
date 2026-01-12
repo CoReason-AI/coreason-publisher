@@ -8,17 +8,19 @@
 #
 # Source Code: https://github.com/CoReason-AI/coreason_publisher
 
-import pytest
-from unittest.mock import MagicMock, patch
-from git import Repo
-from git.exc import GitCommandError, InvalidGitRepositoryError
 from pathlib import Path
+from unittest.mock import MagicMock
+
+import pytest
+from git import Repo
+from git.exc import GitCommandError
 
 from coreason_publisher.core.git_local import GitLocal
 
 # Existing integration-style tests
 
-@pytest.fixture
+
+@pytest.fixture  # type: ignore[misc]
 def temp_git_repo(tmp_path: Path) -> Path:
     """Creates a temporary git repository."""
     repo_dir = tmp_path / "test_repo"
@@ -37,13 +39,13 @@ def temp_git_repo(tmp_path: Path) -> Path:
     return repo_dir
 
 
-def test_init_invalid_repo(tmp_path: Path):
+def test_init_invalid_repo(tmp_path: Path) -> None:
     """Test initialization with an invalid repository path."""
     with pytest.raises(ValueError, match="Invalid git repository"):
         GitLocal(tmp_path)
 
 
-def test_checkout_new_branch(temp_git_repo: Path):
+def test_checkout_new_branch(temp_git_repo: Path) -> None:
     """Test creating and checking out a new branch."""
     git_local = GitLocal(temp_git_repo)
     new_branch = "feature/test-branch"
@@ -55,7 +57,7 @@ def test_checkout_new_branch(temp_git_repo: Path):
     assert new_branch in repo.heads
 
 
-def test_checkout_existing_branch(temp_git_repo: Path):
+def test_checkout_existing_branch(temp_git_repo: Path) -> None:
     """Test checking out an existing branch."""
     git_local = GitLocal(temp_git_repo)
     repo = Repo(temp_git_repo)
@@ -67,7 +69,7 @@ def test_checkout_existing_branch(temp_git_repo: Path):
     assert git_local.get_current_branch() == "existing-branch"
 
 
-def test_checkout_existing_branch_via_new(temp_git_repo: Path):
+def test_checkout_existing_branch_via_new(temp_git_repo: Path) -> None:
     """Test that checkout_new_branch handles existing branches gracefully."""
     git_local = GitLocal(temp_git_repo)
     repo = Repo(temp_git_repo)
@@ -81,7 +83,7 @@ def test_checkout_existing_branch_via_new(temp_git_repo: Path):
     assert git_local.get_current_branch() == branch_name
 
 
-def test_checkout_nonexistent_branch(temp_git_repo: Path):
+def test_checkout_nonexistent_branch(temp_git_repo: Path) -> None:
     """Test checking out a branch that does not exist."""
     git_local = GitLocal(temp_git_repo)
 
@@ -89,7 +91,7 @@ def test_checkout_nonexistent_branch(temp_git_repo: Path):
         git_local.checkout_branch("non-existent")
 
 
-def test_add_all_and_commit(temp_git_repo: Path):
+def test_add_all_and_commit(temp_git_repo: Path) -> None:
     """Test adding and committing files."""
     git_local = GitLocal(temp_git_repo)
 
@@ -110,7 +112,7 @@ def test_add_all_and_commit(temp_git_repo: Path):
     assert "new_file.txt" in last_commit.tree
 
 
-def test_push(temp_git_repo: Path, tmp_path: Path):
+def test_push(temp_git_repo: Path, tmp_path: Path) -> None:
     """Test pushing to a remote."""
     # Create a bare repo to act as remote
     remote_dir = tmp_path / "remote_repo"
@@ -137,16 +139,18 @@ def test_push(temp_git_repo: Path, tmp_path: Path):
     assert "feature/push-test" in remote_repo.heads
 
 
-def test_push_invalid_remote(temp_git_repo: Path):
+def test_push_invalid_remote(temp_git_repo: Path) -> None:
     """Test pushing to a non-existent remote."""
     git_local = GitLocal(temp_git_repo)
 
     with pytest.raises(ValueError, match="Remote origin not found"):
         git_local.push("master")
 
+
 # Mock tests for error coverage
 
-def test_checkout_new_branch_error(temp_git_repo: Path):
+
+def test_checkout_new_branch_error(temp_git_repo: Path) -> None:
     """Test error handling in checkout_new_branch."""
     git_local = GitLocal(temp_git_repo)
 
@@ -159,7 +163,8 @@ def test_checkout_new_branch_error(temp_git_repo: Path):
     with pytest.raises(RuntimeError, match="Failed to checkout branch"):
         git_local.checkout_new_branch("new-branch")
 
-def test_checkout_branch_error(temp_git_repo: Path):
+
+def test_checkout_branch_error(temp_git_repo: Path) -> None:
     """Test error handling in checkout_branch."""
     git_local = GitLocal(temp_git_repo)
 
@@ -172,7 +177,8 @@ def test_checkout_branch_error(temp_git_repo: Path):
     with pytest.raises(RuntimeError, match="Failed to checkout branch"):
         git_local.checkout_branch("existing")
 
-def test_add_all_error(temp_git_repo: Path):
+
+def test_add_all_error(temp_git_repo: Path) -> None:
     """Test error handling in add_all."""
     git_local = GitLocal(temp_git_repo)
 
@@ -182,7 +188,8 @@ def test_add_all_error(temp_git_repo: Path):
     with pytest.raises(RuntimeError, match="Failed to stage files"):
         git_local.add_all()
 
-def test_commit_error(temp_git_repo: Path):
+
+def test_commit_error(temp_git_repo: Path) -> None:
     """Test error handling in commit."""
     git_local = GitLocal(temp_git_repo)
 
@@ -192,7 +199,8 @@ def test_commit_error(temp_git_repo: Path):
     with pytest.raises(RuntimeError, match="Failed to commit"):
         git_local.commit("msg")
 
-def test_push_error(temp_git_repo: Path):
+
+def test_push_error(temp_git_repo: Path) -> None:
     """Test error handling in push."""
     git_local = GitLocal(temp_git_repo)
 
@@ -204,7 +212,8 @@ def test_push_error(temp_git_repo: Path):
     with pytest.raises(RuntimeError, match="Failed to push"):
         git_local.push("branch")
 
-def test_get_current_branch_detached(temp_git_repo: Path):
+
+def test_get_current_branch_detached(temp_git_repo: Path) -> None:
     """Test get_current_branch when in detached HEAD state."""
     git_local = GitLocal(temp_git_repo)
 

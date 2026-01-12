@@ -67,7 +67,8 @@ class GitLocal:
         try:
             if branch_name not in self.repo.heads:
                 # Try to fetch if not local? For now, assume local existence or strict requirement.
-                # If it's a remote branch, we might need to handle it differently, but "checkout_branch" usually implies local.
+                # If it's a remote branch, we might need to handle it differently,
+                # but "checkout_branch" usually implies local.
                 logger.error(f"Branch {branch_name} does not exist locally.")
                 raise ValueError(f"Branch {branch_name} does not exist locally.")
 
@@ -111,16 +112,16 @@ class GitLocal:
         try:
             remote = self.repo.remote(name=remote_name)
             remote.push(refspec=f"{branch_name}:{branch_name}", set_upstream=True)
-        except ValueError:
+        except ValueError as e:
             logger.error(f"Remote {remote_name} not found")
-            raise ValueError(f"Remote {remote_name} not found")
+            raise ValueError(f"Remote {remote_name} not found") from e
         except GitCommandError as e:
             logger.error(f"Failed to push {branch_name}: {e}")
             raise RuntimeError(f"Failed to push {branch_name}: {e}") from e
 
     def is_dirty(self) -> bool:
         """Checks if the working directory has uncommitted changes."""
-        return self.repo.is_dirty(untracked_files=True)
+        return bool(self.repo.is_dirty(untracked_files=True))
 
     def get_current_branch(self) -> str:
         """Returns the name of the current active branch."""

@@ -10,7 +10,8 @@
 
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, ANY
+from typing import Any
+from unittest.mock import ANY, MagicMock
 
 import pytest
 
@@ -24,8 +25,8 @@ from coreason_publisher.core.orchestrator import PublisherOrchestrator
 from coreason_publisher.core.version_manager import BumpType, VersionManager
 
 
-@pytest.fixture
-def mock_dependencies():
+@pytest.fixture  # type: ignore[misc]
+def mock_dependencies() -> dict[str, MagicMock]:
     return {
         "assay_client": MagicMock(spec=AssayClient),
         "foundry_client": MagicMock(spec=FoundryClient),
@@ -37,7 +38,7 @@ def mock_dependencies():
     }
 
 
-def test_propose_release_success(tmp_path: Path, mock_dependencies):
+def test_propose_release_success(tmp_path: Path, mock_dependencies: dict[str, Any]) -> None:
     """Test the happy path for propose_release."""
     deps = mock_dependencies
 
@@ -59,7 +60,7 @@ def test_propose_release_success(tmp_path: Path, mock_dependencies):
         foundry_draft_id="draft-1",
         bump_type=BumpType.MINOR,
         sre_user_id="user-1",
-        release_description="Test release"
+        release_description="Test release",
     )
 
     # Verify Assay Report Saved
@@ -80,16 +81,13 @@ def test_propose_release_success(tmp_path: Path, mock_dependencies):
     deps["git_local"].commit.assert_called_once_with("Commit Message")
     deps["git_local"].push.assert_called_once_with("candidate/v1.1.0")
     deps["git_provider"].create_merge_request.assert_called_once_with(
-        source_branch="candidate/v1.1.0",
-        target_branch="main",
-        title="Release v1.1.0",
-        description=ANY
+        source_branch="candidate/v1.1.0", target_branch="main", title="Release v1.1.0", description=ANY
     )
     deps["foundry_client"].submit_for_review.assert_called_once_with("draft-1", type="release")
     deps["git_provider"].post_comment.assert_called_once()
 
 
-def test_propose_release_mr_failure(tmp_path: Path, mock_dependencies):
+def test_propose_release_mr_failure(tmp_path: Path, mock_dependencies: dict[str, Any]) -> None:
     """Test that Foundry submission is skipped if MR creation fails."""
     deps = mock_dependencies
     workspace_path = tmp_path
@@ -104,11 +102,7 @@ def test_propose_release_mr_failure(tmp_path: Path, mock_dependencies):
 
     with pytest.raises(RuntimeError, match="GitLab Error"):
         orchestrator.propose_release(
-            project_id="p",
-            foundry_draft_id="d",
-            bump_type=BumpType.PATCH,
-            sre_user_id="u",
-            release_description="desc"
+            project_id="p", foundry_draft_id="d", bump_type=BumpType.PATCH, sre_user_id="u", release_description="desc"
         )
 
     # Verify Foundry Client was NOT called
