@@ -30,9 +30,17 @@ class GitLFS:
         We check this by seeing if `git lfs env` returns successfully.
         """
         try:
-            # Check if it is a git repo first
-            if not (repo_path / ".git").exists():
-                logger.error(f"{repo_path} is not a git repository.")
+            # Check if it is a git repo first by running a git command,
+            # which works even in subdirectories.
+            is_git_check = subprocess.run(
+                ["git", "rev-parse", "--is-inside-work-tree"],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if is_git_check.returncode != 0:
+                logger.error(f"{repo_path} is not inside a git work tree.")
                 return False
 
             result = subprocess.run(
@@ -53,13 +61,13 @@ class GitLFS:
 
     def verify_ready(self, repo_path: Path) -> None:
         """
-        Verifies that Git LFS is installed and initialized for the given repository.
+        Verifies that Git LFS is installed, initialized, AND hooks are present.
 
         Args:
             repo_path: The path to the repository to check.
 
         Raises:
-            RuntimeError: If Git LFS is not installed or not initialized in the repository.
+            RuntimeError: If Git LFS is not installed, not initialized, or hooks are missing.
         """
         if not self.is_installed():
             logger.error("Git LFS is not installed on the system.")
@@ -69,7 +77,42 @@ class GitLFS:
             logger.error(f"Git LFS is not initialized in {repo_path}.")
             raise RuntimeError(f"Git LFS is not initialized in {repo_path}.")
 
-        logger.info(f"Git LFS is verified ready in {repo_path}")
+        # Deep verification: Check for pre-push hook
+        try:
+            # Get git directory (usually .git)
+            git_dir_proc = subprocess.run(
+                ["git", "rev-parse", "--git-dir"],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            git_dir = Path(repo_path) / git_dir_proc.stdout.strip()
+            # If absolute path returned, Path / absolute -> absolute, so safe.
+            if Path(git_dir_proc.stdout.strip()).is_absolute():
+                git_dir = Path(git_dir_proc.stdout.strip())
+
+            hooks_dir = git_dir / "hooks"
+            pre_push_hook = hooks_dir / "pre-push"
+
+            if not pre_push_hook.exists():
+                logger.error(f"LFS pre-push hook missing at {pre_push_hook}")
+                raise RuntimeError("Git LFS pre-push hook is missing. Run 'git lfs install'.")
+
+            # Check content
+            content = pre_push_hook.read_text(encoding="utf-8", errors="ignore")
+            if "git-lfs" not in content and "git lfs" not in content:
+                logger.error(f"LFS pre-push hook at {pre_push_hook} does not seem to call git-lfs")
+                raise RuntimeError("Git LFS pre-push hook exists but does not appear to call git-lfs.")
+
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Failed to determine git directory: {e}")
+            raise RuntimeError(f"Failed to determine git directory: {e}") from e
+        except OSError as e:
+            logger.error(f"Failed to verify hooks: {e}")
+            raise RuntimeError(f"Failed to verify hooks: {e}") from e
+
+        logger.info(f"Git LFS is verified ready (env + hooks) in {repo_path}")
 
     def initialize(self, repo_path: Path) -> None:
         """Initializes git-lfs in the repository."""
