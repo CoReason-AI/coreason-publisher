@@ -15,6 +15,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from coreason_publisher.core.artifact_bundler import ArtifactBundler
+from coreason_publisher.core.certificate_generator import CertificateGenerator
 from coreason_publisher.core.council_snapshot import CouncilSnapshot
 from coreason_publisher.core.git_lfs import GitLFS
 from coreason_publisher.core.remote_storage import MockStorageProvider
@@ -40,10 +41,20 @@ def mock_storage_provider() -> MagicMock:
 
 
 @pytest.fixture  # type: ignore[misc]
+def mock_certificate_generator() -> MagicMock:
+    mock = MagicMock(spec=CertificateGenerator)
+    mock.generate.return_value = "# Certificate of Analysis\n\nPASSED"
+    return mock
+
+
+@pytest.fixture  # type: ignore[misc]
 def artifact_bundler(
-    mock_git_lfs: MagicMock, mock_council_snapshot: MagicMock, mock_storage_provider: MagicMock
+    mock_git_lfs: MagicMock,
+    mock_council_snapshot: MagicMock,
+    mock_storage_provider: MagicMock,
+    mock_certificate_generator: MagicMock,
 ) -> ArtifactBundler:
-    return ArtifactBundler(mock_git_lfs, mock_council_snapshot, mock_storage_provider)
+    return ArtifactBundler(mock_git_lfs, mock_council_snapshot, mock_storage_provider, mock_certificate_generator)
 
 
 def test_move_model_artifacts(artifact_bundler: ArtifactBundler, tmp_path: Path) -> None:
@@ -238,13 +249,17 @@ def test_configure_lfs_not_installed(
 
 
 def test_bundle_flow(
-    artifact_bundler: ArtifactBundler, mock_git_lfs: MagicMock, mock_council_snapshot: MagicMock, tmp_path: Path
+    artifact_bundler: ArtifactBundler,
+    mock_git_lfs: MagicMock,
+    mock_council_snapshot: MagicMock,
+    mock_certificate_generator: MagicMock,
+    tmp_path: Path,
 ) -> None:
     """Test the full bundle flow."""
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     (workspace / "evidence").mkdir()
-    (workspace / "evidence" / "assay_report.json").touch()
+    (workspace / "evidence" / "assay_report.json").write_text("{}")
 
     mock_git_lfs.is_initialized.return_value = True
 
@@ -255,6 +270,9 @@ def test_bundle_flow(
     mock_git_lfs.initialize.assert_not_called()
     mock_git_lfs.find_large_files.assert_called()
     mock_council_snapshot.create_snapshot.assert_called()
+    mock_certificate_generator.generate.assert_called_once()
+    assert (workspace / "CERTIFICATE.md").exists()
+    assert (workspace / "CERTIFICATE.md").read_text() == "# Certificate of Analysis\n\nPASSED"
 
 
 def test_bundle_flow_missing_workspace(artifact_bundler: ArtifactBundler, tmp_path: Path) -> None:
@@ -262,3 +280,68 @@ def test_bundle_flow_missing_workspace(artifact_bundler: ArtifactBundler, tmp_pa
     workspace = tmp_path / "missing"
     with pytest.raises(FileNotFoundError):
         artifact_bundler.bundle(workspace)
+
+
+def test_bundle_certificate_generation_error(
+    artifact_bundler: ArtifactBundler,
+    mock_certificate_generator: MagicMock,
+    tmp_path: Path,
+) -> None:
+    """Test that runtime error is raised if certificate generation fails."""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "evidence").mkdir()
+    (workspace / "evidence" / "assay_report.json").write_text("{}")
+
+    mock_certificate_generator.generate.side_effect = RuntimeError("Generation failed")
+
+    with pytest.raises(RuntimeError, match="Failed to generate CERTIFICATE.md"):
+        artifact_bundler.bundle(workspace)
+
+
+def test_bundle_certificate_write_error(
+    artifact_bundler: ArtifactBundler,
+    mock_certificate_generator: MagicMock,
+    tmp_path: Path,
+) -> None:
+    """Test that runtime error is raised if certificate write fails."""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "evidence").mkdir()
+    (workspace / "evidence" / "assay_report.json").write_text("{}")
+
+    mock_certificate_generator.generate.return_value = "content"
+
+    # Patch open to fail when writing CERTIFICATE.md
+    # We need to wrap existing open so reading assay_report.json works
+    original_open = open
+
+    def side_effect(file: Any, mode: str = "r", *args: Any, **kwargs: Any) -> Any:
+        if "CERTIFICATE.md" in str(file) and "w" in mode:
+            raise OSError("Write access denied")
+        return original_open(file, mode, *args, **kwargs)
+
+    with patch("builtins.open", side_effect=side_effect):
+        with pytest.raises(RuntimeError, match="Failed to generate CERTIFICATE.md"):
+            artifact_bundler.bundle(workspace)
+
+
+def test_bundle_passes_correct_data_to_generator(
+    artifact_bundler: ArtifactBundler,
+    mock_certificate_generator: MagicMock,
+    tmp_path: Path,
+) -> None:
+    """Test that the exact data from assay_report.json is passed to the generator."""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "evidence").mkdir()
+
+    import json
+
+    report_data = {"council": {"proposer": "me"}, "results": {"pass": True}}
+
+    (workspace / "evidence" / "assay_report.json").write_text(json.dumps(report_data))
+
+    artifact_bundler.bundle(workspace)
+
+    mock_certificate_generator.generate.assert_called_once_with(report_data)
