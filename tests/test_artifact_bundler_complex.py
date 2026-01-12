@@ -15,6 +15,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from coreason_publisher.core.artifact_bundler import ArtifactBundler
+from coreason_publisher.core.certificate_generator import CertificateGenerator
 from coreason_publisher.core.council_snapshot import CouncilSnapshot
 from coreason_publisher.core.git_lfs import GitLFS
 from coreason_publisher.core.remote_storage import MockStorageProvider
@@ -40,10 +41,20 @@ def mock_storage_provider() -> MagicMock:
 
 
 @pytest.fixture  # type: ignore[misc]
+def mock_certificate_generator() -> MagicMock:
+    mock = MagicMock(spec=CertificateGenerator)
+    mock.generate.return_value = "MOCKED CERTIFICATE"
+    return mock
+
+
+@pytest.fixture  # type: ignore[misc]
 def artifact_bundler(
-    mock_git_lfs: MagicMock, mock_council_snapshot: MagicMock, mock_storage_provider: MagicMock
+    mock_git_lfs: MagicMock,
+    mock_council_snapshot: MagicMock,
+    mock_storage_provider: MagicMock,
+    mock_certificate_generator: MagicMock,
 ) -> ArtifactBundler:
-    return ArtifactBundler(mock_git_lfs, mock_council_snapshot, mock_storage_provider)
+    return ArtifactBundler(mock_git_lfs, mock_council_snapshot, mock_storage_provider, mock_certificate_generator)
 
 
 def test_move_model_artifacts_symlinks(artifact_bundler: ArtifactBundler, tmp_path: Path) -> None:
@@ -156,7 +167,7 @@ def test_complex_scenario(
         # We need to manually call bundle components or just run bundle() if we mock council snapshot
         # Let's run bundle() but we need evidence folder for snapshot
         (workspace / "evidence").mkdir()
-        (workspace / "evidence" / "assay_report.json").touch()
+        (workspace / "evidence" / "assay_report.json").write_text("{}")
 
         mock_git_lfs.is_initialized.return_value = False
 

@@ -14,6 +14,7 @@ from typing import Annotated
 import typer
 
 from coreason_publisher.core.artifact_bundler import ArtifactBundler
+from coreason_publisher.core.certificate_generator import CertificateGenerator
 from coreason_publisher.core.council_snapshot import CouncilSnapshot
 from coreason_publisher.core.electronic_signer import ElectronicSigner
 from coreason_publisher.core.git_lfs import GitLFS
@@ -64,9 +65,13 @@ def get_orchestrator() -> PublisherOrchestrator:
         council_snapshot = CouncilSnapshot()
         # Storage provider configuration could be enhanced
         storage_provider = MockStorageProvider()
+        certificate_generator = CertificateGenerator()
 
         artifact_bundler = ArtifactBundler(
-            git_lfs=git_lfs, council_snapshot=council_snapshot, storage_provider=storage_provider
+            git_lfs=git_lfs,
+            council_snapshot=council_snapshot,
+            storage_provider=storage_provider,
+            certificate_generator=certificate_generator,
         )
 
         electronic_signer = ElectronicSigner()

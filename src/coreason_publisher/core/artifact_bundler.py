@@ -8,10 +8,12 @@
 #
 # Source Code: https://github.com/CoReason-AI/coreason_publisher
 
+import json
 import shutil
 from pathlib import Path
 from typing import List
 
+from coreason_publisher.core.certificate_generator import CertificateGenerator
 from coreason_publisher.core.council_snapshot import CouncilSnapshot
 from coreason_publisher.core.git_lfs import GitLFS
 from coreason_publisher.core.remote_storage import RemoteStorageProvider
@@ -37,10 +39,12 @@ class ArtifactBundler:
         git_lfs: GitLFS,
         council_snapshot: CouncilSnapshot,
         storage_provider: RemoteStorageProvider,
+        certificate_generator: CertificateGenerator,
     ) -> None:
         self.git_lfs = git_lfs
         self.council_snapshot = council_snapshot
         self.storage_provider = storage_provider
+        self.certificate_generator = certificate_generator
 
     def bundle(self, workspace_path: Path) -> None:
         """
@@ -68,7 +72,30 @@ class ArtifactBundler:
         council_manifest = workspace_path / "council_manifest.lock"
         self.council_snapshot.create_snapshot(assay_report, council_manifest)
 
+        # 5. Generate Certificate of Analysis (CERTIFICATE.md)
+        self._generate_certificate(workspace_path, assay_report)
+
         logger.info("Bundling process completed successfully")
+
+    def _generate_certificate(self, workspace_path: Path, assay_report_path: Path) -> None:
+        """
+        Generates CERTIFICATE.md from the assay report.
+        """
+        logger.info(f"Generating CERTIFICATE.md from {assay_report_path}")
+        try:
+            with open(assay_report_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            certificate_content = self.certificate_generator.generate(data)
+            certificate_path = workspace_path / "CERTIFICATE.md"
+
+            with open(certificate_path, "w", encoding="utf-8") as f:
+                f.write(certificate_content)
+
+            logger.info(f"Generated {certificate_path}")
+        except Exception as e:
+            logger.error(f"Failed to generate CERTIFICATE.md: {e}")
+            raise RuntimeError(f"Failed to generate CERTIFICATE.md: {e}") from e
 
     def _handle_remote_storage(self, workspace_path: Path) -> None:
         """
