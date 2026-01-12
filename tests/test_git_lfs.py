@@ -316,6 +316,7 @@ def test_verify_ready_success(git_lfs: GitLFS, tmp_path: Path) -> None:
     1. Installed
     2. Initialized (is_inside_work_tree + git lfs env success)
     3. Hooks are present and correct
+    4. Hooks are executable
     """
     with (
         patch.object(git_lfs, "is_installed", return_value=True),
@@ -323,6 +324,7 @@ def test_verify_ready_success(git_lfs: GitLFS, tmp_path: Path) -> None:
         patch("coreason_publisher.core.git_lfs.subprocess.run") as mock_run,
         patch("pathlib.Path.read_text", return_value="#!/bin/sh\ngit-lfs push --stdin\n"),
         patch("pathlib.Path.exists", return_value=True),
+        patch("os.access", return_value=True),  # executable check
     ):
         # Mock git rev-parse --git-dir
         mock_run.return_value = MagicMock(returncode=0, stdout=".git\n")
@@ -378,6 +380,23 @@ def test_verify_ready_broken_hooks(git_lfs: GitLFS, tmp_path: Path) -> None:
             git_lfs.verify_ready(tmp_path)
 
 
+def test_verify_ready_hook_not_executable(git_lfs: GitLFS, tmp_path: Path) -> None:
+    """Test verify_ready raises RuntimeError when hook is not executable."""
+    with (
+        patch.object(git_lfs, "is_installed", return_value=True),
+        patch.object(git_lfs, "is_initialized", return_value=True),
+        patch("coreason_publisher.core.git_lfs.subprocess.run") as mock_run,
+        patch("pathlib.Path.exists", return_value=True),  # hook exists
+        patch("pathlib.Path.read_text", return_value="#!/bin/sh\ngit-lfs push --stdin\n"),  # Valid content
+        patch("os.access", return_value=False),  # NOT executable
+    ):
+        # Mock git rev-parse --git-dir
+        mock_run.return_value = MagicMock(returncode=0, stdout=".git\n")
+
+        with pytest.raises(RuntimeError, match="Git LFS pre-push hook is not executable"):
+            git_lfs.verify_ready(tmp_path)
+
+
 def test_verify_ready_subdirectory(git_lfs: GitLFS, tmp_path: Path) -> None:
     """
     Test verify_ready works correctly in a subdirectory.
@@ -392,6 +411,7 @@ def test_verify_ready_subdirectory(git_lfs: GitLFS, tmp_path: Path) -> None:
         patch("coreason_publisher.core.git_lfs.subprocess.run") as mock_run,
         patch("pathlib.Path.exists", return_value=True),
         patch("pathlib.Path.read_text", return_value="git-lfs"),
+        patch("os.access", return_value=True),  # executable
     ):
         # Mock git rev-parse --git-dir returning absolute or relative path to .git
         # If in subdir, git dir is ../.git usually.

@@ -8,6 +8,7 @@
 #
 # Source Code: https://github.com/CoReason-AI/coreason_publisher
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -104,6 +105,11 @@ class GitLFS:
             if "git-lfs" not in content and "git lfs" not in content:
                 logger.error(f"LFS pre-push hook at {pre_push_hook} does not seem to call git-lfs")
                 raise RuntimeError("Git LFS pre-push hook exists but does not appear to call git-lfs.")
+
+            # Check executability
+            if not os.access(pre_push_hook, os.X_OK):
+                logger.error(f"LFS pre-push hook at {pre_push_hook} is not executable")
+                raise RuntimeError("Git LFS pre-push hook is not executable. Run 'chmod +x .git/hooks/pre-push'.")
 
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to determine git directory: {e}")
