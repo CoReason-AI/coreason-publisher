@@ -51,6 +51,26 @@ class GitLFS:
             logger.exception(f"Error checking LFS initialization: {e}")
             return False
 
+    def verify_ready(self, repo_path: Path) -> None:
+        """
+        Verifies that Git LFS is installed and initialized for the given repository.
+
+        Args:
+            repo_path: The path to the repository to check.
+
+        Raises:
+            RuntimeError: If Git LFS is not installed or not initialized in the repository.
+        """
+        if not self.is_installed():
+            logger.error("Git LFS is not installed on the system.")
+            raise RuntimeError("Git LFS is not installed on the system.")
+
+        if not self.is_initialized(repo_path):
+            logger.error(f"Git LFS is not initialized in {repo_path}.")
+            raise RuntimeError(f"Git LFS is not initialized in {repo_path}.")
+
+        logger.info(f"Git LFS is verified ready in {repo_path}")
+
     def initialize(self, repo_path: Path) -> None:
         """Initializes git-lfs in the repository."""
         logger.info(f"Initializing Git LFS in {repo_path}")

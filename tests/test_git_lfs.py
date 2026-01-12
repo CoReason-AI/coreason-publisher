@@ -296,3 +296,32 @@ def test_find_large_files_special_characters(git_lfs: GitLFS, tmp_path: Path) ->
     assert f"special_dir/{name_unicode}" in found_files
     assert f"special_dir/{name_brackets}" in found_files
     assert len(found_files) == 3
+
+
+# --- verify_ready Tests ---
+
+
+def test_verify_ready_success(git_lfs: GitLFS, tmp_path: Path) -> None:
+    """Test that verify_ready passes when installed and initialized."""
+    with (
+        patch.object(git_lfs, "is_installed", return_value=True),
+        patch.object(git_lfs, "is_initialized", return_value=True),
+    ):
+        git_lfs.verify_ready(tmp_path)  # Should not raise
+
+
+def test_verify_ready_not_installed(git_lfs: GitLFS, tmp_path: Path) -> None:
+    """Test that verify_ready raises RuntimeError when not installed."""
+    with patch.object(git_lfs, "is_installed", return_value=False):
+        with pytest.raises(RuntimeError, match="Git LFS is not installed on the system"):
+            git_lfs.verify_ready(tmp_path)
+
+
+def test_verify_ready_not_initialized(git_lfs: GitLFS, tmp_path: Path) -> None:
+    """Test that verify_ready raises RuntimeError when not initialized."""
+    with (
+        patch.object(git_lfs, "is_installed", return_value=True),
+        patch.object(git_lfs, "is_initialized", return_value=False),
+    ):
+        with pytest.raises(RuntimeError, match=f"Git LFS is not initialized in {tmp_path}"):
+            git_lfs.verify_ready(tmp_path)
