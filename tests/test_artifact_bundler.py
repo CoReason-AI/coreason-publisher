@@ -316,7 +316,7 @@ def test_bundle_certificate_write_error(
     # We need to wrap existing open so reading assay_report.json works
     original_open = open
 
-    def side_effect(file, mode="r", *args, **kwargs):
+    def side_effect(file: Any, mode: str = "r", *args: Any, **kwargs: Any) -> Any:
         if "CERTIFICATE.md" in str(file) and "w" in mode:
             raise OSError("Write access denied")
         return original_open(file, mode, *args, **kwargs)
@@ -337,6 +337,7 @@ def test_bundle_passes_correct_data_to_generator(
     (workspace / "evidence").mkdir()
 
     import json
+
     report_data = {"council": {"proposer": "me"}, "results": {"pass": True}}
 
     (workspace / "evidence" / "assay_report.json").write_text(json.dumps(report_data))

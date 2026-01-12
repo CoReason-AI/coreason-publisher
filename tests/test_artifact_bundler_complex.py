@@ -54,9 +54,7 @@ def artifact_bundler(
     mock_storage_provider: MagicMock,
     mock_certificate_generator: MagicMock,
 ) -> ArtifactBundler:
-    return ArtifactBundler(
-        mock_git_lfs, mock_council_snapshot, mock_storage_provider, mock_certificate_generator
-    )
+    return ArtifactBundler(mock_git_lfs, mock_council_snapshot, mock_storage_provider, mock_certificate_generator)
 
 
 def test_move_model_artifacts_symlinks(artifact_bundler: ArtifactBundler, tmp_path: Path) -> None:
