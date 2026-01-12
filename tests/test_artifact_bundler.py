@@ -280,3 +280,67 @@ def test_bundle_flow_missing_workspace(artifact_bundler: ArtifactBundler, tmp_pa
     workspace = tmp_path / "missing"
     with pytest.raises(FileNotFoundError):
         artifact_bundler.bundle(workspace)
+
+
+def test_bundle_certificate_generation_error(
+    artifact_bundler: ArtifactBundler,
+    mock_certificate_generator: MagicMock,
+    tmp_path: Path,
+) -> None:
+    """Test that runtime error is raised if certificate generation fails."""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "evidence").mkdir()
+    (workspace / "evidence" / "assay_report.json").write_text("{}")
+
+    mock_certificate_generator.generate.side_effect = RuntimeError("Generation failed")
+
+    with pytest.raises(RuntimeError, match="Failed to generate CERTIFICATE.md"):
+        artifact_bundler.bundle(workspace)
+
+
+def test_bundle_certificate_write_error(
+    artifact_bundler: ArtifactBundler,
+    mock_certificate_generator: MagicMock,
+    tmp_path: Path,
+) -> None:
+    """Test that runtime error is raised if certificate write fails."""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "evidence").mkdir()
+    (workspace / "evidence" / "assay_report.json").write_text("{}")
+
+    mock_certificate_generator.generate.return_value = "content"
+
+    # Patch open to fail when writing CERTIFICATE.md
+    # We need to wrap existing open so reading assay_report.json works
+    original_open = open
+
+    def side_effect(file, mode="r", *args, **kwargs):
+        if "CERTIFICATE.md" in str(file) and "w" in mode:
+            raise OSError("Write access denied")
+        return original_open(file, mode, *args, **kwargs)
+
+    with patch("builtins.open", side_effect=side_effect):
+        with pytest.raises(RuntimeError, match="Failed to generate CERTIFICATE.md"):
+            artifact_bundler.bundle(workspace)
+
+
+def test_bundle_passes_correct_data_to_generator(
+    artifact_bundler: ArtifactBundler,
+    mock_certificate_generator: MagicMock,
+    tmp_path: Path,
+) -> None:
+    """Test that the exact data from assay_report.json is passed to the generator."""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "evidence").mkdir()
+
+    import json
+    report_data = {"council": {"proposer": "me"}, "results": {"pass": True}}
+
+    (workspace / "evidence" / "assay_report.json").write_text(json.dumps(report_data))
+
+    artifact_bundler.bundle(workspace)
+
+    mock_certificate_generator.generate.assert_called_once_with(report_data)
