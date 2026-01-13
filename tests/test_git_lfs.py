@@ -8,6 +8,7 @@
 #
 # Source Code: https://github.com/CoReason-AI/coreason_publisher
 
+import re
 import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -345,7 +346,9 @@ def test_verify_ready_not_initialized(git_lfs: GitLFS, tmp_path: Path) -> None:
         patch.object(git_lfs, "is_installed", return_value=True),
         patch.object(git_lfs, "is_initialized", return_value=False),
     ):
-        with pytest.raises(RuntimeError, match=f"Git LFS is not initialized in {tmp_path}"):
+        # Escape path for regex matching on Windows
+        escaped_path = re.escape(str(tmp_path))
+        with pytest.raises(RuntimeError, match=f"Git LFS is not initialized in {escaped_path}"):
             git_lfs.verify_ready(tmp_path)
 
 
@@ -394,6 +397,35 @@ def test_verify_ready_hook_not_executable(git_lfs: GitLFS, tmp_path: Path) -> No
         mock_run.return_value = MagicMock(returncode=0, stdout=".git\n")
 
         with pytest.raises(RuntimeError, match="Git LFS pre-push hook is not executable"):
+            git_lfs.verify_ready(tmp_path)
+
+
+def test_verify_ready_git_dir_failure(git_lfs: GitLFS, tmp_path: Path) -> None:
+    """Test verify_ready raises RuntimeError when git rev-parse fails."""
+    with (
+        patch.object(git_lfs, "is_installed", return_value=True),
+        patch.object(git_lfs, "is_initialized", return_value=True),
+        patch("coreason_publisher.core.git_lfs.subprocess.run") as mock_run,
+    ):
+        # Mock git rev-parse --git-dir failing
+        mock_run.side_effect = subprocess.CalledProcessError(1, ["git", "rev-parse"])
+
+        with pytest.raises(RuntimeError, match="Failed to determine git directory"):
+            git_lfs.verify_ready(tmp_path)
+
+
+def test_verify_ready_os_error(git_lfs: GitLFS, tmp_path: Path) -> None:
+    """Test verify_ready raises RuntimeError when OSError occurs during file ops."""
+    with (
+        patch.object(git_lfs, "is_installed", return_value=True),
+        patch.object(git_lfs, "is_initialized", return_value=True),
+        patch("coreason_publisher.core.git_lfs.subprocess.run") as mock_run,
+        patch("pathlib.Path.exists", side_effect=OSError("Disk read error")),
+    ):
+        # Mock git rev-parse --git-dir passing
+        mock_run.return_value = MagicMock(returncode=0, stdout=".git\n")
+
+        with pytest.raises(RuntimeError, match="Failed to verify hooks"):
             git_lfs.verify_ready(tmp_path)
 
 
