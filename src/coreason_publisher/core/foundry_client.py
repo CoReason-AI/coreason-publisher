@@ -43,6 +43,17 @@ class FoundryClient(ABC):
         pass  # pragma: no cover
 
     @abstractmethod
+    def reject_release(self, draft_id: str, reason: str) -> None:
+        """
+        Rejects a release draft.
+
+        Args:
+            draft_id: The ID of the Foundry draft.
+            reason: The reason for rejection.
+        """
+        pass  # pragma: no cover
+
+    @abstractmethod
     def get_draft_status(self, draft_id: str) -> str:
         """
         Retrieves the status of a draft.
