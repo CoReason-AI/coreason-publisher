@@ -269,3 +269,50 @@ def test_empty_arguments(client: HttpFoundryClient) -> None:
 
     with pytest.raises(RuntimeError, match="Foundry API error: 404"):
         client.submit_for_review(draft_id, "minor")
+
+
+@respx.mock  # type: ignore[misc]
+def test_reject_release(client: HttpFoundryClient) -> None:
+    draft_id = "draft-123"
+    reason = "Bad code"
+    encoded_draft_id = "draft-123"
+
+    route = respx.post(f"https://api.foundry.com/drafts/{encoded_draft_id}/reject").mock(
+        return_value=Response(200, json={"status": "rejected"})
+    )
+
+    client.reject_release(draft_id, reason)
+
+    # Verify post
+    assert route.called
+    assert route.call_count == 1
+    req = route.calls.last.request
+    assert req.method == "POST"
+    assert json.loads(req.content) == {"reason": reason}
+
+
+@respx.mock  # type: ignore[misc]
+def test_reject_release_not_found(client: HttpFoundryClient) -> None:
+    draft_id = "draft-missing"
+    encoded_draft_id = "draft-missing"
+
+    respx.post(f"https://api.foundry.com/drafts/{encoded_draft_id}/reject").mock(
+        return_value=Response(404, json={"error": "Not Found"})
+    )
+
+    with pytest.raises(RuntimeError, match="Foundry API error: 404"):
+        client.reject_release(draft_id, "reason")
+
+
+@respx.mock  # type: ignore[misc]
+def test_reject_release_conflict(client: HttpFoundryClient) -> None:
+    """Test 409 Conflict (e.g. draft already unlocked)."""
+    draft_id = "draft-locked"
+    encoded_draft_id = "draft-locked"
+
+    respx.post(f"https://api.foundry.com/drafts/{encoded_draft_id}/reject").mock(
+        return_value=Response(409, json={"error": "Draft not in correct state"})
+    )
+
+    with pytest.raises(RuntimeError, match="Foundry API error: 409"):
+        client.reject_release(draft_id, "reason")

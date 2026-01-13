@@ -69,6 +69,16 @@ class HttpFoundryClient(FoundryClient):
         payload = {"signature": signature}
         self._post(url, payload)
 
+    def reject_release(self, draft_id: str, reason: str) -> None:
+        """Rejects a release draft."""
+        encoded_draft_id = urllib.parse.quote(draft_id, safe="")
+        # Assuming URL structure /drafts/{draft_id}/reject
+        url = f"{self.base_url}/drafts/{encoded_draft_id}/reject"
+        logger.info(f"Rejecting draft {draft_id} with reason: {reason}")
+
+        payload = {"reason": reason}
+        self._post(url, payload)
+
     def get_draft_status(self, draft_id: str) -> str:
         """Retrieves the status of a draft."""
         encoded_draft_id = urllib.parse.quote(draft_id, safe="")
