@@ -111,3 +111,34 @@ def test_propose_release_mr_failure(tmp_path: Path, mock_dependencies: dict[str,
 
     # Verify Foundry Client was NOT called
     deps["foundry_client"].submit_for_review.assert_not_called()
+
+
+def test_propose_release_lfs_verification_fails(tmp_path: Path, mock_dependencies: dict[str, Any]) -> None:
+    """
+    Test Edge Case: LFS Verification fails (e.g., hooks missing).
+    The system MUST strictly block the push operation.
+    """
+    deps = mock_dependencies
+    workspace_path = tmp_path
+    orchestrator = PublisherOrchestrator(workspace_path, **deps)
+
+    # Setup basic returns
+    deps["assay_client"].get_latest_report.return_value = {"data": "ok"}
+    deps["version_manager"].calculate_next_version.return_value = "v1.1.0"
+    deps["electronic_signer"].create_signature.return_value = "sig"
+
+    # Simulate LFS verification failure
+    deps["git_lfs"].verify_ready.side_effect = RuntimeError("LFS hooks missing")
+
+    # Execute
+    with pytest.raises(RuntimeError, match="LFS hooks missing"):
+        orchestrator.propose_release(
+            project_id="p", foundry_draft_id="d", bump_type=BumpType.PATCH, sre_user_id="u", release_description="desc"
+        )
+
+    # CRITICAL ASSERTION: Push must NOT be called
+    deps["git_local"].push.assert_not_called()
+
+    # Foundry submission must also be skipped
+    deps["foundry_client"].submit_for_review.assert_not_called()
+    deps["git_provider"].create_merge_request.assert_not_called()
