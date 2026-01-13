@@ -17,6 +17,7 @@ from coreason_publisher.core.artifact_bundler import ArtifactBundler
 from coreason_publisher.core.assay_client import AssayClient
 from coreason_publisher.core.electronic_signer import ElectronicSigner
 from coreason_publisher.core.foundry_client import FoundryClient
+from coreason_publisher.core.git_lfs import GitLFS
 from coreason_publisher.core.git_local import GitLocal
 from coreason_publisher.core.git_provider import GitProvider
 from coreason_publisher.core.orchestrator import PublisherOrchestrator
@@ -30,6 +31,7 @@ def mock_clients() -> dict[str, MagicMock]:
         "foundry_client": MagicMock(spec=FoundryClient),
         "git_provider": MagicMock(spec=GitProvider),
         "git_local": MagicMock(spec=GitLocal),
+        "git_lfs": MagicMock(spec=GitLFS),
         "artifact_bundler": MagicMock(spec=ArtifactBundler),
         "electronic_signer": MagicMock(spec=ElectronicSigner),
         "version_manager": MagicMock(spec=VersionManager),

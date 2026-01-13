@@ -19,6 +19,7 @@ from coreason_publisher.core.artifact_bundler import ArtifactBundler
 from coreason_publisher.core.assay_client import AssayClient
 from coreason_publisher.core.electronic_signer import ElectronicSigner
 from coreason_publisher.core.foundry_client import FoundryClient
+from coreason_publisher.core.git_lfs import GitLFS
 from coreason_publisher.core.git_local import GitLocal
 from coreason_publisher.core.git_provider import GitProvider
 from coreason_publisher.core.orchestrator import PublisherOrchestrator
@@ -32,6 +33,7 @@ def mock_dependencies() -> dict[str, MagicMock]:
         "foundry_client": MagicMock(spec=FoundryClient),
         "git_provider": MagicMock(spec=GitProvider),
         "git_local": MagicMock(spec=GitLocal),
+        "git_lfs": MagicMock(spec=GitLFS),
         "artifact_bundler": MagicMock(spec=ArtifactBundler),
         "electronic_signer": MagicMock(spec=ElectronicSigner),
         "version_manager": MagicMock(spec=VersionManager),
@@ -79,6 +81,8 @@ def test_propose_release_success(tmp_path: Path, mock_dependencies: dict[str, An
     deps["electronic_signer"].create_signature.assert_called_once_with(workspace_path, "user-1")
     deps["git_local"].add_all.assert_called_once()
     deps["git_local"].commit.assert_called_once_with("Commit Message")
+    # Verify strict LFS check before push
+    deps["git_lfs"].verify_ready.assert_called_once_with(workspace_path)
     deps["git_local"].push.assert_called_once_with("candidate/v1.1.0")
     deps["git_provider"].create_merge_request.assert_called_once_with(
         source_branch="candidate/v1.1.0", target_branch="main", title="Release v1.1.0", description=ANY
@@ -107,3 +111,34 @@ def test_propose_release_mr_failure(tmp_path: Path, mock_dependencies: dict[str,
 
     # Verify Foundry Client was NOT called
     deps["foundry_client"].submit_for_review.assert_not_called()
+
+
+def test_propose_release_lfs_verification_fails(tmp_path: Path, mock_dependencies: dict[str, Any]) -> None:
+    """
+    Test Edge Case: LFS Verification fails (e.g., hooks missing).
+    The system MUST strictly block the push operation.
+    """
+    deps = mock_dependencies
+    workspace_path = tmp_path
+    orchestrator = PublisherOrchestrator(workspace_path, **deps)
+
+    # Setup basic returns
+    deps["assay_client"].get_latest_report.return_value = {"data": "ok"}
+    deps["version_manager"].calculate_next_version.return_value = "v1.1.0"
+    deps["electronic_signer"].create_signature.return_value = "sig"
+
+    # Simulate LFS verification failure
+    deps["git_lfs"].verify_ready.side_effect = RuntimeError("LFS hooks missing")
+
+    # Execute
+    with pytest.raises(RuntimeError, match="LFS hooks missing"):
+        orchestrator.propose_release(
+            project_id="p", foundry_draft_id="d", bump_type=BumpType.PATCH, sre_user_id="u", release_description="desc"
+        )
+
+    # CRITICAL ASSERTION: Push must NOT be called
+    deps["git_local"].push.assert_not_called()
+
+    # Foundry submission must also be skipped
+    deps["foundry_client"].submit_for_review.assert_not_called()
+    deps["git_provider"].create_merge_request.assert_not_called()

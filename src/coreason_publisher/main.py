@@ -83,6 +83,7 @@ def get_orchestrator() -> PublisherOrchestrator:
             foundry_client=foundry_client,
             git_provider=git_provider,
             git_local=git_local,
+            git_lfs=git_lfs,
             artifact_bundler=artifact_bundler,
             electronic_signer=electronic_signer,
             version_manager=version_manager,
