@@ -193,3 +193,26 @@ class PublisherOrchestrator:
         self.foundry_client.approve_release(mr_id, srb_signature)
 
         logger.info(f"Release {current_version} finalized successfully.")
+
+    def reject_release(self, mr_id: int, draft_id: str, reason: str) -> None:
+        """
+        Orchestrates the 'Reject' phase (SRB Kickback).
+
+        1. Posts a comment to the Merge Request explaining the rejection.
+        2. Unlocks the Foundry draft (rejects it) so the SRE can make changes.
+
+        Args:
+            mr_id: The Merge Request ID.
+            draft_id: The Foundry draft ID.
+            reason: The reason for rejection.
+        """
+        logger.info(f"Rejecting release (MR: {mr_id}, Draft: {draft_id})")
+
+        # 1. Post Comment to MR
+        comment_body = f"Changes Requested: {reason}"
+        self.git_provider.post_comment(mr_id, comment_body)
+
+        # 2. Unlock Foundry Draft
+        self.foundry_client.reject_release(draft_id, reason)
+
+        logger.info(f"Release rejection processed for MR {mr_id}")

@@ -97,6 +97,32 @@ def test_release_command_failure(mock_orchestrator: MagicMock) -> None:
     assert "Error: Invalid signature" in result.stdout
 
 
+def test_reject_command(mock_orchestrator: MagicMock) -> None:
+    """Test the reject command calls the orchestrator correctly."""
+    result = runner.invoke(
+        app,
+        ["reject", "--mr-id", "123", "--draft-id", "draft-1", "--reason", "bad code"],
+    )
+
+    assert result.exit_code == 0
+    assert "Release rejected successfully" in result.stdout
+
+    mock_orchestrator.reject_release.assert_called_once_with(mr_id=123, draft_id="draft-1", reason="bad code")
+
+
+def test_reject_command_failure(mock_orchestrator: MagicMock) -> None:
+    """Test the reject command handles exceptions."""
+    mock_orchestrator.reject_release.side_effect = RuntimeError("Failed to reject")
+
+    result = runner.invoke(
+        app,
+        ["reject", "--mr-id", "123", "--draft-id", "draft-1", "--reason", "fail"],
+    )
+
+    assert result.exit_code == 1
+    assert "Error: Failed to reject" in result.stdout
+
+
 def test_get_orchestrator_success(tmp_path: Path) -> None:
     """Test successful initialization of orchestrator."""
     env_vars = {

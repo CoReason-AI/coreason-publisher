@@ -144,6 +144,27 @@ def release(
         raise typer.Exit(code=1) from e
 
 
+@app.command()  # type: ignore[misc]
+def reject(
+    mr_id: Annotated[int, typer.Option("--mr-id", help="Merge Request ID")],
+    draft_id: Annotated[str, typer.Option("--draft-id", "-d", help="Foundry Draft ID")],
+    reason: Annotated[str, typer.Option("--reason", "-r", help="Reason for rejection")],
+) -> None:
+    """
+    Reject a release (SRB Kickback).
+    Posts a comment to the MR and unlocks the Foundry draft.
+    """
+    logger.info(f"Command: reject release for MR {mr_id}")
+    orchestrator = get_orchestrator()
+    try:
+        orchestrator.reject_release(mr_id=mr_id, draft_id=draft_id, reason=reason)
+        typer.secho("Release rejected successfully!", fg=typer.colors.GREEN)
+    except Exception as e:
+        logger.exception("Reject failed")
+        typer.secho(f"Error: {e}", fg=typer.colors.RED)
+        raise typer.Exit(code=1) from e
+
+
 def main() -> None:
     """Entry point for the application script."""
     app()
