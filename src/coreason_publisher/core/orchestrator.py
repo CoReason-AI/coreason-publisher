@@ -15,6 +15,7 @@ from coreason_publisher.core.artifact_bundler import ArtifactBundler
 from coreason_publisher.core.assay_client import AssayClient
 from coreason_publisher.core.electronic_signer import ElectronicSigner
 from coreason_publisher.core.foundry_client import FoundryClient
+from coreason_publisher.core.git_lfs import GitLFS
 from coreason_publisher.core.git_local import GitLocal
 from coreason_publisher.core.git_provider import GitProvider
 from coreason_publisher.core.version_manager import BumpType, VersionManager
@@ -33,6 +34,7 @@ class PublisherOrchestrator:
         foundry_client: FoundryClient,
         git_provider: GitProvider,
         git_local: GitLocal,
+        git_lfs: GitLFS,
         artifact_bundler: ArtifactBundler,
         electronic_signer: ElectronicSigner,
         version_manager: VersionManager,
@@ -42,6 +44,7 @@ class PublisherOrchestrator:
         self.foundry_client = foundry_client
         self.git_provider = git_provider
         self.git_local = git_local
+        self.git_lfs = git_lfs
         self.artifact_bundler = artifact_bundler
         self.electronic_signer = electronic_signer
         self.version_manager = version_manager
@@ -116,6 +119,8 @@ class PublisherOrchestrator:
         self.git_local.commit(commit_message)
 
         # 5. Push
+        # Enforce strict LFS verification before push to prevent pushing heavy artifacts without pointers
+        self.git_lfs.verify_ready(self.workspace_path)
         self.git_local.push(candidate_branch)
 
         # 6. Open MR

@@ -19,6 +19,7 @@ from coreason_publisher.core.artifact_bundler import ArtifactBundler
 from coreason_publisher.core.assay_client import AssayClient
 from coreason_publisher.core.electronic_signer import ElectronicSigner
 from coreason_publisher.core.foundry_client import FoundryClient
+from coreason_publisher.core.git_lfs import GitLFS
 from coreason_publisher.core.git_local import GitLocal
 from coreason_publisher.core.git_provider import GitProvider
 from coreason_publisher.core.orchestrator import PublisherOrchestrator
@@ -32,6 +33,7 @@ def mock_dependencies() -> dict[str, MagicMock]:
         "foundry_client": MagicMock(spec=FoundryClient),
         "git_provider": MagicMock(spec=GitProvider),
         "git_local": MagicMock(spec=GitLocal),
+        "git_lfs": MagicMock(spec=GitLFS),
         "artifact_bundler": MagicMock(spec=ArtifactBundler),
         "electronic_signer": MagicMock(spec=ElectronicSigner),
         "version_manager": MagicMock(spec=VersionManager),
@@ -79,6 +81,8 @@ def test_propose_release_success(tmp_path: Path, mock_dependencies: dict[str, An
     deps["electronic_signer"].create_signature.assert_called_once_with(workspace_path, "user-1")
     deps["git_local"].add_all.assert_called_once()
     deps["git_local"].commit.assert_called_once_with("Commit Message")
+    # Verify strict LFS check before push
+    deps["git_lfs"].verify_ready.assert_called_once_with(workspace_path)
     deps["git_local"].push.assert_called_once_with("candidate/v1.1.0")
     deps["git_provider"].create_merge_request.assert_called_once_with(
         source_branch="candidate/v1.1.0", target_branch="main", title="Release v1.1.0", description=ANY
