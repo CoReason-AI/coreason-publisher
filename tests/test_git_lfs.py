@@ -14,7 +14,6 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from coreason_publisher.core.git_lfs import GitLFS
 
 

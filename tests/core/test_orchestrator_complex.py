@@ -13,7 +13,6 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-
 from coreason_publisher.core.artifact_bundler import ArtifactBundler
 
 # We mock other dependencies

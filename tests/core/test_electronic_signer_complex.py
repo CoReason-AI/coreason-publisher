@@ -12,7 +12,6 @@ import os
 from pathlib import Path
 
 import pytest
-
 from coreason_publisher.core.electronic_signer import ElectronicSigner
 
 

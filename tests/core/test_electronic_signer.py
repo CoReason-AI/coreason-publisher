@@ -13,7 +13,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
 from coreason_publisher.core.electronic_signer import ElectronicSigner
 
 

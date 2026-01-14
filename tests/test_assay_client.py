@@ -14,7 +14,6 @@ from unittest import mock
 import httpx
 import pytest
 import respx
-
 from coreason_publisher.core.http_assay_client import HttpAssayClient
 
 

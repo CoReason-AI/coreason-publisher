@@ -14,7 +14,6 @@ from unittest.mock import MagicMock, patch
 
 import gitlab
 import pytest
-
 from coreason_publisher.core.gitlab_provider import GitLabProvider
 
 

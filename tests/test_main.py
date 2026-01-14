@@ -14,13 +14,12 @@ from typing import Generator
 from unittest.mock import MagicMock, patch
 
 import pytest
-from typer import Exit
-from typer.testing import CliRunner
-
 from coreason_publisher.core.gitlab_provider import GitLabProvider
 from coreason_publisher.core.orchestrator import PublisherOrchestrator
 from coreason_publisher.core.version_manager import BumpType
 from coreason_publisher.main import app, get_orchestrator, main
+from typer import Exit
+from typer.testing import CliRunner
 
 runner = CliRunner()
 

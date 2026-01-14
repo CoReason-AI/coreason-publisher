@@ -14,9 +14,8 @@ from unittest.mock import patch
 import httpx
 import pytest
 import respx
-from httpx import Response
-
 from coreason_publisher.core.http_foundry_client import HttpFoundryClient
+from httpx import Response
 
 
 @pytest.fixture  # type: ignore[misc]

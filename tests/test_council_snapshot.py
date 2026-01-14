@@ -12,7 +12,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from coreason_publisher.core.council_snapshot import CouncilSnapshot
 
 

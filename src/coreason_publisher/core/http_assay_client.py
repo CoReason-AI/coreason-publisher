@@ -14,7 +14,6 @@ import urllib.parse
 from typing import Any, Dict
 
 import httpx
-
 from coreason_publisher.core.assay_client import AssayClient
 from coreason_publisher.utils.logger import logger
 

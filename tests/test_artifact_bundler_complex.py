@@ -13,7 +13,6 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from coreason_publisher.core.artifact_bundler import ArtifactBundler
 from coreason_publisher.core.certificate_generator import CertificateGenerator
 from coreason_publisher.core.council_snapshot import CouncilSnapshot
