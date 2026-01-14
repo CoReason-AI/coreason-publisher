@@ -79,17 +79,22 @@ class GitLFS:
             raise RuntimeError(f"Git LFS is not initialized in {repo_path}.")
 
         # Deep verification: Check for pre-push hook
-        try:  # pragma: no cover
-            # Get git directory (usually .git)
-            git_dir_proc = subprocess.run(
-                ["git", "rev-parse", "--git-dir"], cwd=repo_path, capture_output=True, text=True, check=True
+        try:
+            # Get hooks directory using --git-path (handles worktrees/submodules correctly)
+            hooks_path_proc = subprocess.run(
+                ["git", "rev-parse", "--git-path", "hooks"],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                check=True,
             )
-            git_dir = Path(repo_path) / git_dir_proc.stdout.strip()
-            # If absolute path returned, Path / absolute -> absolute, so safe.
-            if Path(git_dir_proc.stdout.strip()).is_absolute():
-                git_dir = Path(git_dir_proc.stdout.strip())
+            hooks_path_str = hooks_path_proc.stdout.strip()
 
-            hooks_dir = git_dir / "hooks"
+            # Resolve path (relative to repo root or absolute)
+            hooks_dir = Path(repo_path) / hooks_path_str
+            if Path(hooks_path_str).is_absolute():
+                hooks_dir = Path(hooks_path_str)
+
             pre_push_hook = hooks_dir / "pre-push"
 
             if not pre_push_hook.exists():
@@ -107,10 +112,10 @@ class GitLFS:
                 logger.error(f"LFS pre-push hook at {pre_push_hook} is not executable")
                 raise RuntimeError("Git LFS pre-push hook is not executable. Run 'chmod +x .git/hooks/pre-push'.")
 
-        except subprocess.CalledProcessError as e:  # pragma: no cover
+        except subprocess.CalledProcessError as e:
             logger.error(f"Failed to determine git directory: {e}")
             raise RuntimeError(f"Failed to determine git directory: {e}") from e
-        except OSError as e:  # pragma: no cover
+        except OSError as e:
             logger.error(f"Failed to verify hooks: {e}")
             raise RuntimeError(f"Failed to verify hooks: {e}") from e
 
