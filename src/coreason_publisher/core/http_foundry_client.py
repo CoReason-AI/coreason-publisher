@@ -14,6 +14,7 @@ import urllib.parse
 from typing import Any
 
 import httpx
+
 from coreason_publisher.core.foundry_client import FoundryClient
 from coreason_publisher.utils.logger import logger
 

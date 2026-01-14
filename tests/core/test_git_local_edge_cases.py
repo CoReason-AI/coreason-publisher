@@ -11,8 +11,9 @@
 from pathlib import Path
 
 import pytest
-from coreason_publisher.core.git_local import GitLocal
 from git import Repo
+
+from coreason_publisher.core.git_local import GitLocal
 
 
 @pytest.fixture  # type: ignore[misc]

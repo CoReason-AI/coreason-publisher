@@ -13,6 +13,7 @@ from typing import Generator
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from coreason_publisher.core.git_provider import GitProvider
 from coreason_publisher.core.version_manager import BumpType, VersionManager
 

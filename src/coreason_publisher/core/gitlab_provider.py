@@ -12,9 +12,10 @@ import os
 from typing import Optional
 
 import gitlab
+from gitlab.v4.objects import Project
+
 from coreason_publisher.core.git_provider import GitProvider
 from coreason_publisher.utils.logger import logger
-from gitlab.v4.objects import Project
 
 
 class GitLabProvider(GitProvider):

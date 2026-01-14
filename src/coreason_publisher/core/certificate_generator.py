@@ -12,8 +12,9 @@ import importlib.resources
 from datetime import datetime, timezone
 from typing import Any, Dict
 
-from coreason_publisher.utils.logger import logger
 from jinja2 import Template
+
+from coreason_publisher.utils.logger import logger
 
 
 class CertificateGenerator:

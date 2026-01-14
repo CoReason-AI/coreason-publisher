@@ -12,6 +12,7 @@ from typing import Any, Dict
 from unittest.mock import patch
 
 import pytest
+
 from coreason_publisher.core.certificate_generator import CertificateGenerator
 
 

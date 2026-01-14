@@ -12,9 +12,10 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-from coreason_publisher.core.git_local import GitLocal
 from git import Repo
 from git.exc import GitCommandError
+
+from coreason_publisher.core.git_local import GitLocal
 
 # Existing integration-style tests
 

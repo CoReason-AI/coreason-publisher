@@ -10,9 +10,10 @@
 
 from pathlib import Path
 
-from coreason_publisher.utils.logger import logger
 from git import Repo
 from git.exc import GitCommandError, InvalidGitRepositoryError
+
+from coreason_publisher.utils.logger import logger
 
 
 class GitLocal:
