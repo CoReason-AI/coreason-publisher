@@ -79,7 +79,7 @@ class GitLFS:
             raise RuntimeError(f"Git LFS is not initialized in {repo_path}.")
 
         # Deep verification: Check for pre-push hook
-        try:  # pragma: no cover
+        try:
             # Get git directory (usually .git)
             git_dir_proc = subprocess.run(
                 ["git", "rev-parse", "--git-dir"], cwd=repo_path, capture_output=True, text=True, check=True
@@ -107,10 +107,10 @@ class GitLFS:
                 logger.error(f"LFS pre-push hook at {pre_push_hook} is not executable")
                 raise RuntimeError("Git LFS pre-push hook is not executable. Run 'chmod +x .git/hooks/pre-push'.")
 
-        except subprocess.CalledProcessError as e:  # pragma: no cover
+        except subprocess.CalledProcessError as e:
             logger.error(f"Failed to determine git directory: {e}")
             raise RuntimeError(f"Failed to determine git directory: {e}") from e
-        except OSError as e:  # pragma: no cover
+        except OSError as e:
             logger.error(f"Failed to verify hooks: {e}")
             raise RuntimeError(f"Failed to verify hooks: {e}") from e
 

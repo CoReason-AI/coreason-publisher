@@ -475,3 +475,22 @@ def test_is_initialized_in_subdirectory(git_lfs: GitLFS, tmp_path: Path) -> None
         assert mock_run.call_count == 2
         # Verify first call args check for rev-parse
         assert mock_run.call_args_list[0][0][0] == ["git", "rev-parse", "--is-inside-work-tree"]
+
+
+def test_verify_ready_absolute_git_dir(git_lfs: GitLFS, tmp_path: Path) -> None:
+    """
+    Test verify_ready works when git rev-parse returns an absolute path.
+    """
+    with (
+        patch.object(git_lfs, "is_installed", return_value=True),
+        patch.object(git_lfs, "is_initialized", return_value=True),
+        patch("coreason_publisher.core.git_lfs.subprocess.run") as mock_run,
+        patch("pathlib.Path.read_text", return_value="#!/bin/sh\ngit-lfs push --stdin\n"),
+        patch("pathlib.Path.exists", return_value=True),
+        patch("os.access", return_value=True),
+    ):
+        # Mock git rev-parse --git-dir returning absolute path
+        abs_git_dir = str(tmp_path / ".git")
+        mock_run.return_value = MagicMock(returncode=0, stdout=f"{abs_git_dir}\n")
+
+        git_lfs.verify_ready(tmp_path)  # Should not raise
