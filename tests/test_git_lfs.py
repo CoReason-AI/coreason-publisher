@@ -490,7 +490,46 @@ def test_verify_ready_absolute_git_dir(git_lfs: GitLFS, tmp_path: Path) -> None:
         patch("os.access", return_value=True),
     ):
         # Mock git rev-parse --git-dir returning absolute path
-        abs_git_dir = str(tmp_path / ".git")
-        mock_run.return_value = MagicMock(returncode=0, stdout=f"{abs_git_dir}\n")
+        abs_hooks_path = str(tmp_path / ".git" / "hooks")
+        mock_run.return_value = MagicMock(returncode=0, stdout=f"{abs_hooks_path}\n")
 
         git_lfs.verify_ready(tmp_path)  # Should not raise
+
+
+def test_verify_ready_worktree_structure(git_lfs: GitLFS, tmp_path: Path) -> None:
+    """
+    Test verify_ready in a worktree-like structure where hooks are separate.
+    Simulates `git rev-parse --git-path hooks` returning a path outside the repo.
+    """
+    # Create separate hooks dir
+    common_git_dir = tmp_path / "common_git"
+    common_git_dir.mkdir()
+    hooks_dir = common_git_dir / "hooks"
+    hooks_dir.mkdir()
+    pre_push = hooks_dir / "pre-push"
+    pre_push.write_text("git-lfs push")
+
+    worktree_path = tmp_path / "worktree"
+    worktree_path.mkdir()
+
+    with (
+        patch.object(git_lfs, "is_installed", return_value=True),
+        patch.object(git_lfs, "is_initialized", return_value=True),
+        patch("coreason_publisher.core.git_lfs.subprocess.run") as mock_run,
+        # We don't patch Path.exists/read_text here, we rely on the real file system
+        # created above. But we need to patch os.access for executable check.
+        patch("os.access", return_value=True),
+    ):
+        # Mock git rev-parse --git-path hooks returning absolute path to our mock hooks
+        mock_run.return_value = MagicMock(returncode=0, stdout=f"{hooks_dir.absolute()}\n")
+
+        git_lfs.verify_ready(worktree_path)
+
+        # Verify calls
+        mock_run.assert_called_with(
+            ["git", "rev-parse", "--git-path", "hooks"],
+            cwd=worktree_path,
+            capture_output=True,
+            text=True,
+            check=True,
+        )

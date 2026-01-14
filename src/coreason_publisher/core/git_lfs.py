@@ -80,16 +80,21 @@ class GitLFS:
 
         # Deep verification: Check for pre-push hook
         try:
-            # Get git directory (usually .git)
-            git_dir_proc = subprocess.run(
-                ["git", "rev-parse", "--git-dir"], cwd=repo_path, capture_output=True, text=True, check=True
+            # Get hooks directory using --git-path (handles worktrees/submodules correctly)
+            hooks_path_proc = subprocess.run(
+                ["git", "rev-parse", "--git-path", "hooks"],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                check=True,
             )
-            git_dir = Path(repo_path) / git_dir_proc.stdout.strip()
-            # If absolute path returned, Path / absolute -> absolute, so safe.
-            if Path(git_dir_proc.stdout.strip()).is_absolute():
-                git_dir = Path(git_dir_proc.stdout.strip())
+            hooks_path_str = hooks_path_proc.stdout.strip()
 
-            hooks_dir = git_dir / "hooks"
+            # Resolve path (relative to repo root or absolute)
+            hooks_dir = Path(repo_path) / hooks_path_str
+            if Path(hooks_path_str).is_absolute():
+                hooks_dir = Path(hooks_path_str)
+
             pre_push_hook = hooks_dir / "pre-push"
 
             if not pre_push_hook.exists():
