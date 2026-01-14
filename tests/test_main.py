@@ -79,19 +79,21 @@ def test_propose_command_failure(mock_orchestrator: MagicMock) -> None:
 
 def test_release_command(mock_orchestrator: MagicMock) -> None:
     """Test the release command calls the orchestrator correctly."""
-    result = runner.invoke(app, ["release", "--mr-id", "123", "--signature", "valid-sig"])
+    result = runner.invoke(app, ["release", "--mr-id", "123", "--signature", "valid-sig", "--srb-user-id", "srb-1"])
 
     assert result.exit_code == 0
     assert "Release finalized successfully" in result.stdout
 
-    mock_orchestrator.finalize_release.assert_called_once_with(mr_id=123, srb_signature="valid-sig")
+    mock_orchestrator.finalize_release.assert_called_once_with(
+        mr_id=123, srb_signature="valid-sig", srb_user_id="srb-1"
+    )
 
 
 def test_release_command_failure(mock_orchestrator: MagicMock) -> None:
     """Test the release command handles exceptions."""
     mock_orchestrator.finalize_release.side_effect = ValueError("Invalid signature")
 
-    result = runner.invoke(app, ["release", "--mr-id", "123", "--signature", "bad-sig"])
+    result = runner.invoke(app, ["release", "--mr-id", "123", "--signature", "bad-sig", "--srb-user-id", "srb-1"])
 
     assert result.exit_code == 1
     assert "Error: Invalid signature" in result.stdout

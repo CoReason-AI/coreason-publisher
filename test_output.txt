@@ -1,0 +1,31 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.12, pytest-8.4.2, pluggy-1.6.0
+rootdir: /app
+configfile: pyproject.toml
+testpaths: tests
+plugins: cov-5.0.0, respx-0.22.0, anyio-4.12.1
+collected 200 items
+
+tests/core/test_electronic_signer.py .........                           [  4%]
+tests/core/test_electronic_signer_complex.py ....                        [  6%]
+tests/core/test_foundry_client.py ......................                 [ 17%]
+tests/core/test_git_local.py ..............                              [ 24%]
+tests/core/test_git_local_edge_cases.py ..                               [ 25%]
+tests/core/test_orchestrator_complex.py ..                               [ 26%]
+tests/core/test_orchestrator_propose.py ...                              [ 28%]
+tests/core/test_orchestrator_reject.py ...                               [ 29%]
+tests/core/test_orchestrator_release.py ...                              [ 31%]
+tests/core/test_version_manager.py ..................                    [ 40%]
+tests/test_artifact_bundler.py ............                              [ 46%]
+tests/test_artifact_bundler_complex.py ....                              [ 48%]
+tests/test_assay_client.py ...........                                   [ 53%]
+tests/test_certificate_generator.py ............                         [ 59%]
+tests/test_config.py ..                                                  [ 60%]
+tests/test_council_snapshot.py .........                                 [ 65%]
+tests/test_git_lfs.py ....................................               [ 83%]
+tests/test_gitlab_provider.py .....................                      [ 93%]
+tests/test_main.py ..........                                            [ 98%]
+tests/test_remote_storage.py .                                           [ 99%]
+tests/test_utils.py ..                                                   [100%]
+
+============================= 200 passed in 3.42s ==============================

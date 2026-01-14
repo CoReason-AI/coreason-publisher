@@ -118,6 +118,9 @@ class PublisherOrchestrator:
         self.git_local.add_all()
         self.git_local.commit(commit_message)
 
+        # Send audit to Veritas
+        self.electronic_signer.send_audit_to_veritas(sre_user_id, signature, "SRE")
+
         # 5. Push
         # Enforce strict LFS verification before push to prevent pushing heavy artifacts without pointers
         self.git_lfs.verify_ready(self.workspace_path)
@@ -160,7 +163,7 @@ class PublisherOrchestrator:
 
         logger.info(f"Release proposal completed. MR: {mr_id}, Version: {next_version}")
 
-    def finalize_release(self, mr_id: int, srb_signature: str) -> None:
+    def finalize_release(self, mr_id: int, srb_signature: str, srb_user_id: str) -> None:
         """
         Orchestrates the 'Release' phase.
 
@@ -172,6 +175,7 @@ class PublisherOrchestrator:
         Args:
             mr_id: The Merge Request ID.
             srb_signature: The cryptographic signature provided by the SRB.
+            srb_user_id: The ID of the SRB member approving the release.
         """
         logger.info(f"Finalizing release for MR {mr_id}")
 
@@ -179,6 +183,9 @@ class PublisherOrchestrator:
         if not self.electronic_signer.verify_signature(self.workspace_path, srb_signature):
             logger.error("Signature verification failed! Release aborted.")
             raise ValueError("Signature verification failed. The artifact does not match the SRB signature.")
+
+        # Send audit to Veritas
+        self.electronic_signer.send_audit_to_veritas(srb_user_id, srb_signature, "SRB")
 
         # 2. Get Version for Tag
         # We assume the workspace is currently on the candidate branch
