@@ -70,7 +70,7 @@ def test_release_tampered_bundle_integration(tmp_path: Path, mock_deps_with_real
 
     # 3. Finalize Release
     with pytest.raises(ValueError, match="Signature verification failed"):
-        orchestrator.finalize_release(mr_id=123, srb_signature=valid_signature)
+        orchestrator.finalize_release(mr_id=123, srb_signature=valid_signature, srb_user_id="srb-user")
 
     # Verify no merge happened
     deps["git_provider"].merge_merge_request.assert_not_called()
@@ -95,6 +95,6 @@ def test_release_valid_bundle_integration(tmp_path: Path, mock_deps_with_real_si
 
     deps["version_manager"].get_current_version.return_value = "v1.0.0"
 
-    orchestrator.finalize_release(mr_id=123, srb_signature=valid_signature)
+    orchestrator.finalize_release(mr_id=123, srb_signature=valid_signature, srb_user_id="srb-user")
 
     deps["git_provider"].merge_merge_request.assert_called_once_with(123)

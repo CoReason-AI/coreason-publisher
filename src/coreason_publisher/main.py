@@ -129,6 +129,7 @@ def propose(
 def release(
     mr_id: Annotated[int, typer.Option("--mr-id", help="Merge Request ID")],
     signature: Annotated[str, typer.Option("--signature", help="SRB Signature")],
+    srb_user_id: Annotated[str, typer.Option("--srb-user-id", "-u", help="SRB User ID")],
 ) -> None:
     """
     Finalize a release (System/SRB).
@@ -137,7 +138,7 @@ def release(
     logger.info(f"Command: finalize release for MR {mr_id}")
     orchestrator = get_orchestrator()
     try:
-        orchestrator.finalize_release(mr_id=mr_id, srb_signature=signature)
+        orchestrator.finalize_release(mr_id=mr_id, srb_signature=signature, srb_user_id=srb_user_id)
         typer.secho("Release finalized successfully!", fg=typer.colors.GREEN)
     except Exception as e:
         logger.exception("Release failed")
