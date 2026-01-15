@@ -13,6 +13,7 @@ from typing import Annotated
 
 import typer
 
+from coreason_publisher.config import PublisherConfig
 from coreason_publisher.core.artifact_bundler import ArtifactBundler
 from coreason_publisher.core.certificate_generator import CertificateGenerator
 from coreason_publisher.core.council_snapshot import CouncilSnapshot
@@ -37,6 +38,7 @@ def get_orchestrator() -> PublisherOrchestrator:
     """Dependency Injection for the Orchestrator."""
     try:
         workspace_path = Path.cwd()
+        config = PublisherConfig()
 
         # Infrastructure
         git_local = GitLocal(workspace_path)
@@ -68,6 +70,7 @@ def get_orchestrator() -> PublisherOrchestrator:
         certificate_generator = CertificateGenerator()
 
         artifact_bundler = ArtifactBundler(
+            config=config,
             git_lfs=git_lfs,
             council_snapshot=council_snapshot,
             storage_provider=storage_provider,
