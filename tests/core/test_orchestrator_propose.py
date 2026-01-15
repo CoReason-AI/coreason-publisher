@@ -81,6 +81,7 @@ def test_propose_release_success(tmp_path: Path, mock_dependencies: dict[str, An
     deps["electronic_signer"].create_signature.assert_called_once_with(workspace_path, "user-1")
     deps["git_local"].add_all.assert_called_once()
     deps["git_local"].commit.assert_called_once_with("Commit Message")
+    deps["electronic_signer"].send_audit_to_veritas.assert_called_once_with("user-1", "dummy-hash", "SRE")
     # Verify strict LFS check before push
     deps["git_lfs"].verify_ready.assert_called_once_with(workspace_path)
     deps["git_local"].push.assert_called_once_with("candidate/v1.1.0")

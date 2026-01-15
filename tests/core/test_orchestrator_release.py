@@ -48,15 +48,17 @@ def test_finalize_release_success(tmp_path: Path, mock_dependencies: dict[str, A
     # Setup
     mr_id = 123
     signature = "valid-signature"
+    srb_user_id = "srb-user"
 
     deps["electronic_signer"].verify_signature.return_value = True
     deps["version_manager"].get_current_version.return_value = "v1.2.0"
 
     # Execute
-    orchestrator.finalize_release(mr_id, signature)
+    orchestrator.finalize_release(mr_id, signature, srb_user_id)
 
     # Verify
     deps["electronic_signer"].verify_signature.assert_called_once_with(workspace_path, signature)
+    deps["electronic_signer"].send_audit_to_veritas.assert_called_once_with(srb_user_id, signature, "SRB")
     deps["git_provider"].merge_merge_request.assert_called_once_with(mr_id)
     deps["git_provider"].create_tag.assert_called_once_with(tag_name="v1.2.0", ref="main", message="Release v1.2.0")
     deps["foundry_client"].approve_release.assert_called_once_with(mr_id, signature)
@@ -71,8 +73,9 @@ def test_finalize_release_invalid_signature(tmp_path: Path, mock_dependencies: d
     deps["electronic_signer"].verify_signature.return_value = False
 
     with pytest.raises(ValueError, match="Signature verification failed"):
-        orchestrator.finalize_release(123, "bad-sig")
+        orchestrator.finalize_release(123, "bad-sig", "srb-user")
 
+    deps["electronic_signer"].send_audit_to_veritas.assert_not_called()
     deps["git_provider"].merge_merge_request.assert_not_called()
     deps["foundry_client"].approve_release.assert_not_called()
 
@@ -87,6 +90,6 @@ def test_finalize_release_no_version(tmp_path: Path, mock_dependencies: dict[str
     deps["version_manager"].get_current_version.return_value = None
 
     with pytest.raises(RuntimeError, match="Could not determine version"):
-        orchestrator.finalize_release(123, "sig")
+        orchestrator.finalize_release(123, "sig", "srb-user")
 
     deps["git_provider"].merge_merge_request.assert_not_called()
