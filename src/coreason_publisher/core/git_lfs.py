@@ -9,6 +9,7 @@
 # Source Code: https://github.com/CoReason-AI/coreason_publisher
 
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -28,7 +29,8 @@ class GitLFS:
         """
         Checks if git-lfs is initialized in the given repository.
 
-        We check this by seeing if `git lfs env` returns successfully.
+        We check this by seeing if `git lfs env` returns successfully
+        AND verifying the endpoint configuration.
         """
         try:
             # Check if it is a git repo first by running a git command,
@@ -53,6 +55,13 @@ class GitLFS:
             )
             if result.returncode != 0:
                 logger.debug(f"git lfs env failed: {result.stderr}")
+                return False
+
+            # Verify endpoint configuration
+            # Looking for something like 'Endpoint=https://...' or 'Endpoint (git)=https://...'
+            # Simply checking if "Endpoint" is in the output is a reasonable proxy for configuration check.
+            if "Endpoint" not in result.stdout:
+                logger.error("Git LFS environment does not show a configured Endpoint.")
                 return False
 
             return True
@@ -91,9 +100,12 @@ class GitLFS:
             hooks_path_str = hooks_path_proc.stdout.strip()
 
             # Resolve path (relative to repo root or absolute)
-            hooks_dir = Path(repo_path) / hooks_path_str
             if Path(hooks_path_str).is_absolute():
                 hooks_dir = Path(hooks_path_str)
+            else:
+                hooks_dir = repo_path / hooks_path_str
+                # Normalize path
+                hooks_dir = hooks_dir.resolve()
 
             pre_push_hook = hooks_dir / "pre-push"
 
@@ -161,6 +173,10 @@ class GitLFS:
             for file_path in search_path.rglob("*"):
                 try:
                     if file_path.is_file() and not file_path.is_symlink():
+                        # Exclude .git directory from scan to match robust behavior
+                        if ".git" in file_path.parts:
+                            continue
+
                         if file_path.stat().st_size > threshold_bytes:
                             # Use relative path for cleaner tracking
                             relative_path = file_path.relative_to(search_path).as_posix()
@@ -174,13 +190,44 @@ class GitLFS:
         return large_files
 
     def track_patterns(self, repo_path: Path, patterns: List[str]) -> None:
-        """Tracks the given file patterns using git-lfs."""
+        """
+        Tracks the given file patterns using git-lfs.
+        Ensures idempotency by checking .gitattributes first.
+        """
         if not patterns:
             return
 
-        logger.info(f"Tracking patterns with Git LFS: {patterns}")
+        # Check existing .gitattributes to avoid redundant calls
+        gitattributes_path = repo_path / ".gitattributes"
+        existing_attributes = ""
+        if gitattributes_path.exists():
+            try:
+                existing_attributes = gitattributes_path.read_text(encoding="utf-8", errors="ignore")
+            except Exception as e:
+                logger.warning(f"Failed to read .gitattributes: {e}")
+
+        # Filter patterns that are not already tracked
+        new_patterns = []
+        for pattern in patterns:
+            # Simple check: if pattern + " filter=lfs" is in attributes.
+            # Use regex for better accuracy (allow spaces, etc.)
+            # Pattern in .gitattributes usually looks like: pattern filter=lfs diff=lfs merge=lfs -text
+            # We just search for the pattern at start of line
+            escaped_pattern = re.escape(pattern)
+            # This regex might be too strict if user has custom attributes,
+            # but sufficient for idempotency check of our own actions.
+            if not re.search(rf"^{escaped_pattern}\s+filter=lfs", existing_attributes, re.MULTILINE):
+                new_patterns.append(pattern)
+            else:
+                logger.debug(f"Pattern '{pattern}' is already tracked in .gitattributes")
+
+        if not new_patterns:
+            logger.info("All patterns are already tracked.")
+            return
+
+        logger.info(f"Tracking new patterns with Git LFS: {new_patterns}")
         try:
-            cmd = ["git", "lfs", "track"] + patterns
+            cmd = ["git", "lfs", "track"] + new_patterns
             subprocess.run(
                 cmd,
                 cwd=repo_path,

@@ -44,12 +44,22 @@ def test_is_initialized_success(git_lfs: GitLFS, tmp_path: Path) -> None:
     with patch("coreason_publisher.core.git_lfs.subprocess.run") as mock_run:
         mock_run.side_effect = [
             MagicMock(returncode=0),
-            MagicMock(returncode=0),
+            MagicMock(returncode=0, stdout="Endpoint=https://gitlab.com/repo/info/lfs"),
         ]
         assert git_lfs.is_initialized(tmp_path) is True
         assert mock_run.call_count == 2
         assert mock_run.call_args_list[0][0][0] == ["git", "rev-parse", "--is-inside-work-tree"]
         assert mock_run.call_args_list[1][0][0] == ["git", "lfs", "env"]
+
+
+def test_is_initialized_no_endpoint(git_lfs: GitLFS, tmp_path: Path) -> None:
+    # Git lfs env succeeds, but no Endpoint configured
+    with patch("coreason_publisher.core.git_lfs.subprocess.run") as mock_run:
+        mock_run.side_effect = [
+            MagicMock(returncode=0),
+            MagicMock(returncode=0, stdout="Git LFS v2.0.0 (GitHub; windows 386; go 1.8.3)\n"),
+        ]
+        assert git_lfs.is_initialized(tmp_path) is False
 
 
 def test_is_initialized_failure(git_lfs: GitLFS, tmp_path: Path) -> None:
@@ -111,6 +121,60 @@ def test_track_patterns_success(git_lfs: GitLFS, tmp_path: Path) -> None:
             capture_output=True,
             text=True,
         )
+
+
+def test_track_patterns_idempotency_skip(git_lfs: GitLFS, tmp_path: Path) -> None:
+    """Test that patterns already in .gitattributes are skipped."""
+    (tmp_path / ".gitattributes").write_text("*.bin filter=lfs diff=lfs merge=lfs -text\n", encoding="utf-8")
+    patterns = ["*.bin", "*.pt"]
+
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0)
+        git_lfs.track_patterns(tmp_path, patterns)
+
+        # Should only track *.pt, as *.bin is already present
+        mock_run.assert_called_once_with(
+            ["git", "lfs", "track", "*.pt"],
+            cwd=tmp_path,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+
+def test_track_patterns_gitattributes_read_error(git_lfs: GitLFS, tmp_path: Path) -> None:
+    """Test idempotency logic when reading .gitattributes fails."""
+    # We want to ensure we catch the exception and log a warning, then proceed to track everything.
+    # Because we couldn't check if it's there, we track it to be safe.
+    patterns = ["*.bin"]
+
+    with patch("pathlib.Path.exists", return_value=True):
+        with patch("pathlib.Path.read_text", side_effect=OSError("Permission denied")):
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(returncode=0)
+
+                git_lfs.track_patterns(tmp_path, patterns)
+
+                # Should track patterns because we couldn't verify they were there
+                mock_run.assert_called_once_with(
+                    ["git", "lfs", "track", "*.bin"],
+                    cwd=tmp_path,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+
+
+def test_track_patterns_all_exist(git_lfs: GitLFS, tmp_path: Path) -> None:
+    """Test that if all patterns exist, no git command is run."""
+    (tmp_path / ".gitattributes").write_text(
+        "*.bin filter=lfs\n*.pt filter=lfs diff=lfs merge=lfs -text\n", encoding="utf-8"
+    )
+    patterns = ["*.bin", "*.pt"]
+
+    with patch("subprocess.run") as mock_run:
+        git_lfs.track_patterns(tmp_path, patterns)
+        mock_run.assert_not_called()
 
 
 def test_track_patterns_failure(git_lfs: GitLFS, tmp_path: Path) -> None:
@@ -180,6 +244,31 @@ def test_find_large_files_mixed(git_lfs: GitLFS, tmp_path: Path) -> None:
     assert len(found_files) == 2
     assert "large.bin" in found_files
     assert "subdir/nested_large.bin" in found_files
+
+
+def test_find_large_files_ignores_git_dir(git_lfs: GitLFS, tmp_path: Path) -> None:
+    """Test that files inside .git directory are ignored."""
+    git_dir = tmp_path / ".git"
+    git_dir.mkdir()
+    git_objects = git_dir / "objects"
+    git_objects.mkdir()
+
+    large_git_obj = git_objects / "hash.bin"
+    with open(large_git_obj, "wb") as f:
+        f.write(b"\0" * 1024)
+
+    # Should detect normal file outside .git
+    normal_large = tmp_path / "normal.bin"
+    with open(normal_large, "wb") as f:
+        f.write(b"\0" * 1024)
+
+    found_files = git_lfs.find_large_files(tmp_path, 500)
+
+    assert "normal.bin" in found_files
+    # Cannot use "assert not in" blindly if we don't know exact path format, but we check filename
+    # relative path for git obj would be ".git/objects/hash.bin" if returned
+    found_paths = [str(Path(p)) for p in found_files]  # normalize separators
+    assert str(Path(".git/objects/hash.bin")) not in found_paths
 
 
 def test_find_large_files_none(git_lfs: GitLFS, tmp_path: Path) -> None:
@@ -315,7 +404,7 @@ def test_verify_ready_success(git_lfs: GitLFS, tmp_path: Path) -> None:
     """
     Test that verify_ready passes when:
     1. Installed
-    2. Initialized (is_inside_work_tree + git lfs env success)
+    2. Initialized (is_inside_work_tree + git lfs env success + endpoint)
     3. Hooks are present and correct
     4. Hooks are executable
     """
@@ -327,8 +416,8 @@ def test_verify_ready_success(git_lfs: GitLFS, tmp_path: Path) -> None:
         patch("pathlib.Path.exists", return_value=True),
         patch("os.access", return_value=True),  # executable check
     ):
-        # Mock git rev-parse --git-dir
-        mock_run.return_value = MagicMock(returncode=0, stdout=".git\n")
+        # Mock git rev-parse --git-path hooks
+        mock_run.return_value = MagicMock(returncode=0, stdout=".git/hooks\n")
 
         git_lfs.verify_ready(tmp_path)  # Should not raise
 
@@ -360,8 +449,8 @@ def test_verify_ready_missing_hooks(git_lfs: GitLFS, tmp_path: Path) -> None:
         patch("coreason_publisher.core.git_lfs.subprocess.run") as mock_run,
         patch("pathlib.Path.exists", return_value=False),  # hook missing
     ):
-        # Mock git rev-parse --git-dir
-        mock_run.return_value = MagicMock(returncode=0, stdout=".git\n")
+        # Mock git rev-parse --git-path hooks
+        mock_run.return_value = MagicMock(returncode=0, stdout=".git/hooks\n")
 
         with pytest.raises(RuntimeError, match="Git LFS pre-push hook is missing"):
             git_lfs.verify_ready(tmp_path)
@@ -376,8 +465,8 @@ def test_verify_ready_broken_hooks(git_lfs: GitLFS, tmp_path: Path) -> None:
         patch("pathlib.Path.exists", return_value=True),  # hook exists
         patch("pathlib.Path.read_text", return_value="#!/bin/sh\necho 'hello'\n"),  # Invalid content
     ):
-        # Mock git rev-parse --git-dir
-        mock_run.return_value = MagicMock(returncode=0, stdout=".git\n")
+        # Mock git rev-parse --git-path hooks
+        mock_run.return_value = MagicMock(returncode=0, stdout=".git/hooks\n")
 
         with pytest.raises(RuntimeError, match="Git LFS pre-push hook exists but does not appear to call git-lfs"):
             git_lfs.verify_ready(tmp_path)
@@ -393,8 +482,8 @@ def test_verify_ready_hook_not_executable(git_lfs: GitLFS, tmp_path: Path) -> No
         patch("pathlib.Path.read_text", return_value="#!/bin/sh\ngit-lfs push --stdin\n"),  # Valid content
         patch("os.access", return_value=False),  # NOT executable
     ):
-        # Mock git rev-parse --git-dir
-        mock_run.return_value = MagicMock(returncode=0, stdout=".git\n")
+        # Mock git rev-parse --git-path hooks
+        mock_run.return_value = MagicMock(returncode=0, stdout=".git/hooks\n")
 
         with pytest.raises(RuntimeError, match="Git LFS pre-push hook is not executable"):
             git_lfs.verify_ready(tmp_path)
@@ -407,7 +496,7 @@ def test_verify_ready_git_dir_failure(git_lfs: GitLFS, tmp_path: Path) -> None:
         patch.object(git_lfs, "is_initialized", return_value=True),
         patch("coreason_publisher.core.git_lfs.subprocess.run") as mock_run,
     ):
-        # Mock git rev-parse --git-dir failing
+        # Mock git rev-parse failing
         mock_run.side_effect = subprocess.CalledProcessError(1, ["git", "rev-parse"])
 
         with pytest.raises(RuntimeError, match="Failed to determine git directory"):
@@ -422,8 +511,8 @@ def test_verify_ready_os_error(git_lfs: GitLFS, tmp_path: Path) -> None:
         patch("coreason_publisher.core.git_lfs.subprocess.run") as mock_run,
         patch("pathlib.Path.exists", side_effect=OSError("Disk read error")),
     ):
-        # Mock git rev-parse --git-dir passing
-        mock_run.return_value = MagicMock(returncode=0, stdout=".git\n")
+        # Mock git rev-parse passing
+        mock_run.return_value = MagicMock(returncode=0, stdout=".git/hooks\n")
 
         with pytest.raises(RuntimeError, match="Failed to verify hooks"):
             git_lfs.verify_ready(tmp_path)
@@ -445,9 +534,8 @@ def test_verify_ready_subdirectory(git_lfs: GitLFS, tmp_path: Path) -> None:
         patch("pathlib.Path.read_text", return_value="git-lfs"),
         patch("os.access", return_value=True),  # executable
     ):
-        # Mock git rev-parse --git-dir returning absolute or relative path to .git
-        # If in subdir, git dir is ../.git usually.
-        mock_run.return_value = MagicMock(returncode=0, stdout="../.git\n")
+        # Mock git rev-parse --git-path hooks
+        mock_run.return_value = MagicMock(returncode=0, stdout="../.git/hooks\n")
 
         git_lfs.verify_ready(subdir)  # Should not raise
 
@@ -468,7 +556,7 @@ def test_is_initialized_in_subdirectory(git_lfs: GitLFS, tmp_path: Path) -> None
 
         mock_run.side_effect = [
             MagicMock(returncode=0),  # rev-parse
-            MagicMock(returncode=0),  # lfs env
+            MagicMock(returncode=0, stdout="Endpoint=https://test\n"),  # lfs env
         ]
 
         assert git_lfs.is_initialized(subdir) is True
@@ -489,7 +577,7 @@ def test_verify_ready_absolute_git_dir(git_lfs: GitLFS, tmp_path: Path) -> None:
         patch("pathlib.Path.exists", return_value=True),
         patch("os.access", return_value=True),
     ):
-        # Mock git rev-parse --git-dir returning absolute path
+        # Mock git rev-parse --git-path hooks returning absolute path
         abs_hooks_path = str(tmp_path / ".git" / "hooks")
         mock_run.return_value = MagicMock(returncode=0, stdout=f"{abs_hooks_path}\n")
 
