@@ -14,11 +14,17 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from coreason_publisher.config import PublisherConfig
 from coreason_publisher.core.artifact_bundler import ArtifactBundler
 from coreason_publisher.core.certificate_generator import CertificateGenerator
 from coreason_publisher.core.council_snapshot import CouncilSnapshot
 from coreason_publisher.core.git_lfs import GitLFS
 from coreason_publisher.core.remote_storage import MockStorageProvider
+
+
+@pytest.fixture  # type: ignore[misc]
+def mock_config() -> PublisherConfig:
+    return PublisherConfig(lfs_threshold_mb=100, remote_storage_threshold_mb=70 * 1024)
 
 
 @pytest.fixture  # type: ignore[misc]
@@ -49,12 +55,15 @@ def mock_certificate_generator() -> MagicMock:
 
 @pytest.fixture  # type: ignore[misc]
 def artifact_bundler(
+    mock_config: PublisherConfig,
     mock_git_lfs: MagicMock,
     mock_council_snapshot: MagicMock,
     mock_storage_provider: MagicMock,
     mock_certificate_generator: MagicMock,
 ) -> ArtifactBundler:
-    return ArtifactBundler(mock_git_lfs, mock_council_snapshot, mock_storage_provider, mock_certificate_generator)
+    return ArtifactBundler(
+        mock_config, mock_git_lfs, mock_council_snapshot, mock_storage_provider, mock_certificate_generator
+    )
 
 
 def test_move_model_artifacts(artifact_bundler: ArtifactBundler, tmp_path: Path) -> None:
@@ -179,6 +188,31 @@ def test_handle_remote_storage(
     assert (workspace / ".git" / "big_object").read_text() == "should be ignored"
 
 
+def test_handle_remote_storage_configurable(
+    artifact_bundler: ArtifactBundler, mock_config: PublisherConfig, mock_storage_provider: MagicMock, tmp_path: Path
+) -> None:
+    """Test that remote storage threshold is configurable."""
+    # Set config to 50 bytes (50 / 1024 / 1024 MB approx)
+    # But property expects MB.
+    # We'll just patch the property directly or set MB to something small.
+    # 1MB = 1048576 bytes.
+    mock_config.remote_storage_threshold_mb = 1  # 1 MB
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    large_file = workspace / "large.bin"
+    # Create file > 1MB
+    with open(large_file, "wb") as f:
+        f.write(b"\0" * (1024 * 1024 + 100))
+
+    mock_storage_provider.upload.return_value = "hash-123"
+
+    artifact_bundler._handle_remote_storage(workspace)
+
+    mock_storage_provider.upload.assert_called_once_with(large_file)
+
+
 def test_handle_remote_storage_oserror(
     artifact_bundler: ArtifactBundler, mock_storage_provider: MagicMock, tmp_path: Path
 ) -> None:
@@ -218,6 +252,21 @@ def test_configure_lfs(artifact_bundler: ArtifactBundler, mock_git_lfs: MagicMoc
 
     mock_git_lfs.initialize.assert_called_once_with(workspace)
     mock_git_lfs.track_patterns.assert_called_once_with(workspace, large_files)
+
+
+def test_configure_lfs_uses_config(
+    artifact_bundler: ArtifactBundler, mock_config: PublisherConfig, mock_git_lfs: MagicMock, tmp_path: Path
+) -> None:
+    """Test LFS configuration uses the configured threshold."""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    mock_config.lfs_threshold_mb = 200
+    mock_git_lfs.is_initialized.return_value = True
+
+    artifact_bundler._configure_lfs(workspace)
+
+    mock_git_lfs.find_large_files.assert_called_once_with(workspace, 200 * 1024 * 1024)
 
 
 def test_configure_lfs_already_initialized(

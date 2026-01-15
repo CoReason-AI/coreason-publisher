@@ -13,6 +13,7 @@ import shutil
 from pathlib import Path
 from typing import List
 
+from coreason_publisher.config import PublisherConfig
 from coreason_publisher.core.certificate_generator import CertificateGenerator
 from coreason_publisher.core.council_snapshot import CouncilSnapshot
 from coreason_publisher.core.git_lfs import GitLFS
@@ -26,21 +27,18 @@ class ArtifactBundler:
     Handles Model Co-Location, LFS configuration, and Council Snapshots.
     """
 
-    # 100MB
-    LFS_THRESHOLD = 100 * 1024 * 1024
-    # 70GB
-    REMOTE_STORAGE_THRESHOLD = 70 * 1024 * 1024 * 1024
-
     MODEL_EXTENSIONS = {".safetensors", ".bin", ".pt"}
     MODEL_FILENAMES = {"adapter_config.json"}
 
     def __init__(
         self,
+        config: PublisherConfig,
         git_lfs: GitLFS,
         council_snapshot: CouncilSnapshot,
         storage_provider: RemoteStorageProvider,
         certificate_generator: CertificateGenerator,
     ) -> None:
+        self.config = config
         self.git_lfs = git_lfs
         self.council_snapshot = council_snapshot
         self.storage_provider = storage_provider
@@ -102,7 +100,8 @@ class ArtifactBundler:
         Scans for files larger than REMOTE_STORAGE_THRESHOLD.
         Uploads them via the storage provider and replaces them with a pointer.
         """
-        logger.info("Scanning for ultra-large files (>70GB)...")
+        threshold = self.config.remote_storage_threshold_bytes
+        logger.info(f"Scanning for ultra-large files (>{threshold} bytes)...")
         # Recursively find files
         for file_path in workspace_path.rglob("*"):
             try:
@@ -113,7 +112,7 @@ class ArtifactBundler:
                 if ".git" in file_path.parts:
                     continue
 
-                if file_path.stat().st_size > self.REMOTE_STORAGE_THRESHOLD:
+                if file_path.stat().st_size > threshold:
                     logger.info(f"Found ultra-large file: {file_path}")
                     remote_hash = self.storage_provider.upload(file_path)
 
@@ -175,7 +174,7 @@ class ArtifactBundler:
 
     def _configure_lfs(self, workspace_path: Path) -> None:
         """
-        Finds files > 100MB and tracks them with Git LFS.
+        Finds files > LFS_THRESHOLD and tracks them with Git LFS.
         """
         if not self.git_lfs.is_installed():
             logger.error("Git LFS is not installed.")
@@ -184,7 +183,8 @@ class ArtifactBundler:
         if not self.git_lfs.is_initialized(workspace_path):
             self.git_lfs.initialize(workspace_path)
 
-        large_files = self.git_lfs.find_large_files(workspace_path, self.LFS_THRESHOLD)
+        threshold = self.config.lfs_threshold_bytes
+        large_files = self.git_lfs.find_large_files(workspace_path, threshold)
 
         if large_files:
             # git lfs track takes patterns. We can pass exact relative paths.
