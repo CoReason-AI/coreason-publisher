@@ -8,12 +8,12 @@
 #
 # Source Code: https://github.com/CoReason-AI/coreason_publisher
 
-import os
 from typing import Optional
 
 import gitlab
 from gitlab.v4.objects import Project
 
+from coreason_publisher.config import PublisherConfig
 from coreason_publisher.core.git_provider import GitProvider
 from coreason_publisher.utils.logger import logger
 
@@ -21,19 +21,28 @@ from coreason_publisher.utils.logger import logger
 class GitLabProvider(GitProvider):
     """GitLab implementation of the GitProvider interface."""
 
-    def __init__(self, project_id: str | int) -> None:
+    def __init__(self, project_id: str | int, config: Optional[PublisherConfig] = None) -> None:
         """
         Initialize the GitLab provider.
 
         Args:
             project_id: The ID or path of the GitLab project.
+            config: Optional configuration object. If not provided, will instantiate one.
         """
-        self.token = os.getenv("GITLAB_TOKEN")
-        if not self.token:
-            logger.error("GITLAB_TOKEN environment variable not set")
-            raise ValueError("GITLAB_TOKEN environment variable not set")
+        if config is None:
+            # Fallback for existing tests or usages that might not pass config yet,
+            # though ideally we should require it.
+            # However, since we are refactoring, we can instantiate it here to pick up env vars.
+            config = PublisherConfig()
 
-        self.url = os.getenv("GITLAB_URL", "https://gitlab.com")
+        self.config = config
+
+        if not self.config.gitlab_token:
+            logger.error("GITLAB_TOKEN not set in config")
+            raise ValueError("GITLAB_TOKEN not set in config")
+
+        self.token = self.config.gitlab_token.get_secret_value()
+        self.url = self.config.gitlab_url
         self.gl = gitlab.Gitlab(url=self.url, private_token=self.token)
         self.project_id = project_id
         self._project: Optional[Project] = None

@@ -8,16 +8,34 @@
 #
 # Source Code: https://github.com/CoReason-AI/coreason_publisher
 
-from dataclasses import dataclass
+from typing import Optional
+from pydantic import Field, SecretStr
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-@dataclass
-class PublisherConfig:
-    """Configuration for the Coreason Publisher."""
+class PublisherConfig(BaseSettings):
+    """
+    Configuration for the Coreason Publisher.
+    Reads from environment variables and .env file.
+    """
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
-    lfs_threshold_mb: int = 100
-    # 70GB default
-    remote_storage_threshold_mb: int = 70 * 1024
+    # Thresholds
+    lfs_threshold_mb: int = Field(default=100, description="Threshold for Git LFS in MB")
+    remote_storage_threshold_mb: int = Field(default=70 * 1024, description="Threshold for remote storage in MB")
+
+    # Assay Service
+    assay_api_url: Optional[str] = Field(default=None, description="Assay API Base URL")
+    assay_api_token: Optional[SecretStr] = Field(default=None, description="Assay API Token")
+
+    # Foundry Service
+    foundry_api_url: Optional[str] = Field(default=None, description="Foundry API Base URL")
+    foundry_api_token: Optional[SecretStr] = Field(default=None, description="Foundry API Token")
+
+    # GitLab
+    gitlab_url: str = Field(default="https://gitlab.com", description="GitLab Instance URL")
+    gitlab_token: Optional[SecretStr] = Field(default=None, description="GitLab Private Token")
+    gitlab_project_id: Optional[str] = Field(default=None, description="GitLab Project ID")
 
     @property
     def lfs_threshold_bytes(self) -> int:

@@ -38,29 +38,27 @@ def get_orchestrator() -> PublisherOrchestrator:
     """Dependency Injection for the Orchestrator."""
     try:
         workspace_path = Path.cwd()
+        # PublisherConfig now reads from environment variables
         config = PublisherConfig()
 
         # Infrastructure
         git_local = GitLocal(workspace_path)
-        # TODO: Project ID for GitLab provider should be configurable or derived.
-        # For now, we might need an env var or argument.
-        # But `GitLabProvider` takes `project_id`.
-        # We can assume it's passed or env var.
-        # Let's check environment variable `GITLAB_PROJECT_ID`.
-        import os
 
-        gitlab_project_id = os.getenv("GITLAB_PROJECT_ID")
+        # Use gitlab_project_id from config or fallback/error
+        gitlab_project_id = config.gitlab_project_id
         if not gitlab_project_id:
-            # Fallback or error?
-            # For CLI, maybe we can try to guess from git remote?
-            # For now, let's require the env var.
             logger.warning("GITLAB_PROJECT_ID not set. GitLab integration may fail.")
             gitlab_project_id = "0"  # Dummy if not set, will fail later if used
 
-        git_provider = GitLabProvider(project_id=gitlab_project_id)
+        # We need to update GitLabProvider to potentially take token from config?
+        # The GitLabProvider currently uses os.getenv("GITLAB_TOKEN") in its __init__ (based on memory/assumption)
+        # We should check if we should refactor GitLabProvider as well.
+        # But for now, let's stick to what we have or pass token if the provider accepts it.
+        # Assuming GitLabProvider accepts project_id.
+        git_provider = GitLabProvider(project_id=gitlab_project_id, config=config)
 
-        assay_client = HttpAssayClient()
-        foundry_client = HttpFoundryClient()
+        assay_client = HttpAssayClient(config=config)
+        foundry_client = HttpFoundryClient(config=config)
 
         # Components
         git_lfs = GitLFS()

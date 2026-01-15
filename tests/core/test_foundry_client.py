@@ -16,6 +16,7 @@ import pytest
 import respx
 from httpx import Response
 
+from coreason_publisher.config import PublisherConfig
 from coreason_publisher.core.http_foundry_client import HttpFoundryClient
 
 
@@ -23,7 +24,8 @@ from coreason_publisher.core.http_foundry_client import HttpFoundryClient
 def client(monkeypatch: pytest.MonkeyPatch) -> HttpFoundryClient:
     monkeypatch.setenv("FOUNDRY_API_URL", "https://api.foundry.com")
     monkeypatch.setenv("FOUNDRY_API_TOKEN", "test-token")
-    return HttpFoundryClient()
+    config = PublisherConfig()
+    return HttpFoundryClient(config)
 
 
 @respx.mock  # type: ignore[misc]
@@ -51,7 +53,24 @@ def test_submit_for_review_failure(client: HttpFoundryClient) -> None:
         return_value=Response(500, json={"error": "server error"})
     )
 
-    with pytest.raises(RuntimeError, match="Foundry API error: 500"):
+    # 500 triggers retry, so expecting HTTPStatusError from tenacity if not wrapped
+    # or if wrapped, it depends.
+    # We didn't wrap HTTPStatusError in HttpFoundryClient to raise RuntimeError for 5xx.
+    # It just bubbles up as HTTPStatusError (after retries).
+    # Wait, in HttpFoundryClient I wrote:
+    # except httpx.HTTPStatusError as e:
+    #     self._handle_http_error(e)
+    #
+    # And _handle_http_error says:
+    # if 400 <= ... < 500: raise RuntimeError...
+    # raise e
+    #
+    # So for 500, it raises e (HTTPStatusError).
+    # Tenacity catches it and retries.
+    # After max retries, it raises RetryError (if not reraise=True) or the original exception (if reraise=True).
+    # I set reraise=True.
+
+    with pytest.raises(httpx.HTTPStatusError):
         client.submit_for_review(draft_id, "patch")
 
 
@@ -135,7 +154,7 @@ def test_get_draft_status_http_error(client: HttpFoundryClient) -> None:
 
     respx.get(f"https://api.foundry.com/drafts/{draft_id}").mock(return_value=Response(503, text="Service Unavailable"))
 
-    with pytest.raises(RuntimeError, match="Foundry API error: 503"):
+    with pytest.raises(httpx.HTTPStatusError):
         client.get_draft_status(draft_id)
 
 
@@ -145,7 +164,7 @@ def test_timeout_error(client: HttpFoundryClient) -> None:
 
     respx.post(f"https://api.foundry.com/drafts/{draft_id}/submit").mock(side_effect=httpx.TimeoutException("timeout"))
 
-    with pytest.raises(RuntimeError, match="Timeout error during Foundry API call"):
+    with pytest.raises(httpx.TimeoutException):
         client.submit_for_review(draft_id, "minor")
 
 
@@ -157,7 +176,7 @@ def test_network_error(client: HttpFoundryClient) -> None:
         side_effect=httpx.RequestError("connection refused")
     )
 
-    with pytest.raises(RuntimeError, match="Network error during Foundry API call"):
+    with pytest.raises(httpx.RequestError):
         client.submit_for_review(draft_id, "minor")
 
 
@@ -165,12 +184,16 @@ def test_missing_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("FOUNDRY_API_URL", raising=False)
     monkeypatch.delenv("FOUNDRY_API_TOKEN", raising=False)
 
-    with pytest.raises(ValueError, match="FOUNDRY_API_URL environment variable not set"):
-        HttpFoundryClient()
+    config = PublisherConfig() # Empty config
+
+    with pytest.raises(ValueError, match="FOUNDRY_API_URL not set in config"):
+        HttpFoundryClient(config)
 
     monkeypatch.setenv("FOUNDRY_API_URL", "http://example.com")
-    with pytest.raises(ValueError, match="FOUNDRY_API_TOKEN environment variable not set"):
-        HttpFoundryClient()
+    config = PublisherConfig()
+
+    with pytest.raises(ValueError, match="FOUNDRY_API_TOKEN not set in config"):
+        HttpFoundryClient(config)
 
 
 @respx.mock  # type: ignore[misc]
@@ -180,6 +203,15 @@ def test_post_unexpected_exception(client: HttpFoundryClient) -> None:
 
     draft_id = "draft-unexpected"
     type_ = "minor"
+
+    # NOTE: Since we are using tenacity reraise=True, unexpected exceptions (that are not in retry list)
+    # should bubble up immediately or be wrapped?
+    # In HttpFoundryClient._post:
+    # except Exception as e: ... raise RuntimeError ...
+    # This exception handler is INSIDE the retry block.
+    # Tenacity wraps the method.
+    # If _post raises RuntimeError, Tenacity sees it.
+    # RuntimeError is NOT in retry_list. So it should be raised immediately.
 
     with pytest.raises(RuntimeError, match="Unexpected error during POST"):
         with patch("httpx.Client.post", side_effect=Exception("Boom")):
@@ -233,10 +265,14 @@ def test_malformed_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that a malformed base URL raises a proper error when used."""
     monkeypatch.setenv("FOUNDRY_API_URL", "invalid-url-without-scheme")
     monkeypatch.setenv("FOUNDRY_API_TOKEN", "test-token")
-    client = HttpFoundryClient()  # Should not raise here
+    config = PublisherConfig()
+    client = HttpFoundryClient(config)  # Should not raise here
 
     # httpx raises UnsupportedProtocol for missing scheme
-    with pytest.raises(RuntimeError, match="Network error during Foundry API call"):
+    # retry catches RequestError? UnsupportedProtocol inherits from RequestError? Yes.
+    # It will retry and then raise it.
+
+    with pytest.raises(httpx.RequestError):
         client.get_draft_status("123")
 
 
