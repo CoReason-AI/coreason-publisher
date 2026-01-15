@@ -142,6 +142,29 @@ def test_track_patterns_idempotency_skip(git_lfs: GitLFS, tmp_path: Path) -> Non
         )
 
 
+def test_track_patterns_gitattributes_read_error(git_lfs: GitLFS, tmp_path: Path) -> None:
+    """Test idempotency logic when reading .gitattributes fails."""
+    # We want to ensure we catch the exception and log a warning, then proceed to track everything.
+    # Because we couldn't check if it's there, we track it to be safe.
+    patterns = ["*.bin"]
+
+    with patch("pathlib.Path.exists", return_value=True):
+        with patch("pathlib.Path.read_text", side_effect=OSError("Permission denied")):
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(returncode=0)
+
+                git_lfs.track_patterns(tmp_path, patterns)
+
+                # Should track patterns because we couldn't verify they were there
+                mock_run.assert_called_once_with(
+                    ["git", "lfs", "track", "*.bin"],
+                    cwd=tmp_path,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+
+
 def test_track_patterns_all_exist(git_lfs: GitLFS, tmp_path: Path) -> None:
     """Test that if all patterns exist, no git command is run."""
     (tmp_path / ".gitattributes").write_text(
@@ -221,6 +244,31 @@ def test_find_large_files_mixed(git_lfs: GitLFS, tmp_path: Path) -> None:
     assert len(found_files) == 2
     assert "large.bin" in found_files
     assert "subdir/nested_large.bin" in found_files
+
+
+def test_find_large_files_ignores_git_dir(git_lfs: GitLFS, tmp_path: Path) -> None:
+    """Test that files inside .git directory are ignored."""
+    git_dir = tmp_path / ".git"
+    git_dir.mkdir()
+    git_objects = git_dir / "objects"
+    git_objects.mkdir()
+
+    large_git_obj = git_objects / "hash.bin"
+    with open(large_git_obj, "wb") as f:
+        f.write(b"\0" * 1024)
+
+    # Should detect normal file outside .git
+    normal_large = tmp_path / "normal.bin"
+    with open(normal_large, "wb") as f:
+        f.write(b"\0" * 1024)
+
+    found_files = git_lfs.find_large_files(tmp_path, 500)
+
+    assert "normal.bin" in found_files
+    # Cannot use "assert not in" blindly if we don't know exact path format, but we check filename
+    # relative path for git obj would be ".git/objects/hash.bin" if returned
+    found_paths = [str(Path(p)) for p in found_files]  # normalize separators
+    assert str(Path(".git/objects/hash.bin")) not in found_paths
 
 
 def test_find_large_files_none(git_lfs: GitLFS, tmp_path: Path) -> None:
