@@ -184,7 +184,7 @@ def test_missing_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("FOUNDRY_API_URL", raising=False)
     monkeypatch.delenv("FOUNDRY_API_TOKEN", raising=False)
 
-    config = PublisherConfig() # Empty config
+    config = PublisherConfig()  # Empty config
 
     with pytest.raises(ValueError, match="FOUNDRY_API_URL not set in config"):
         HttpFoundryClient(config)

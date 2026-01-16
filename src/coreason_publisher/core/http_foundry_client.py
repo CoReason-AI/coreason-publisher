@@ -13,7 +13,7 @@ import urllib.parse
 from typing import Any
 
 import httpx
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from coreason_publisher.config import PublisherConfig
 from coreason_publisher.core.foundry_client import FoundryClient
@@ -43,11 +43,11 @@ class HttpFoundryClient(FoundryClient):
         # Normalize base_url to not have a trailing slash for easier concatenation
         self.base_url = self.config.foundry_api_url.rstrip("/")
 
-    @retry(
+    @retry(  # type: ignore[misc]
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
         retry=retry_if_exception_type((httpx.RequestError, httpx.TimeoutException, httpx.HTTPStatusError)),
-        reraise=True
+        reraise=True,
     )
     def submit_for_review(self, draft_id: str, type: str) -> None:
         """Submits a draft for review."""
@@ -58,11 +58,11 @@ class HttpFoundryClient(FoundryClient):
         payload = {"type": type}
         self._post(url, payload)
 
-    @retry(
+    @retry(  # type: ignore[misc]
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
         retry=retry_if_exception_type((httpx.RequestError, httpx.TimeoutException, httpx.HTTPStatusError)),
-        reraise=True
+        reraise=True,
     )
     def approve_release(self, mr_id: int, signature: str) -> None:
         """Approves a release."""
@@ -72,11 +72,11 @@ class HttpFoundryClient(FoundryClient):
         payload = {"signature": signature}
         self._post(url, payload)
 
-    @retry(
+    @retry(  # type: ignore[misc]
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
         retry=retry_if_exception_type((httpx.RequestError, httpx.TimeoutException, httpx.HTTPStatusError)),
-        reraise=True
+        reraise=True,
     )
     def reject_release(self, draft_id: str, reason: str) -> None:
         """Rejects a release draft."""
@@ -87,11 +87,11 @@ class HttpFoundryClient(FoundryClient):
         payload = {"reason": reason}
         self._post(url, payload)
 
-    @retry(
+    @retry(  # type: ignore[misc]
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
         retry=retry_if_exception_type((httpx.RequestError, httpx.TimeoutException, httpx.HTTPStatusError)),
-        reraise=True
+        reraise=True,
     )
     def get_draft_status(self, draft_id: str) -> str:
         """Retrieves the status of a draft."""
@@ -126,10 +126,10 @@ class HttpFoundryClient(FoundryClient):
             # RuntimeError is NOT in retry_if_exception_type list. So it won't retry on 4xx.
             # This is correct.
             self._handle_http_error(e)
-            raise # Should be unreachable
+            raise  # Should be unreachable
         except (httpx.RequestError, httpx.TimeoutException) as e:
-             logger.warning(f"Network/Timeout error retrieving draft status: {e}. Retrying...")
-             raise
+            logger.warning(f"Network/Timeout error retrieving draft status: {e}. Retrying...")
+            raise
         except Exception as e:
             if isinstance(e, RuntimeError):
                 raise
@@ -159,6 +159,9 @@ class HttpFoundryClient(FoundryClient):
             raise RuntimeError(f"Unexpected error during POST to {url}: {e}") from e
 
     def _get_headers(self) -> dict[str, str]:
+        if not self.config.foundry_api_token:
+            raise ValueError("FOUNDRY_API_TOKEN missing")
+
         return {
             "Authorization": f"Bearer {self.config.foundry_api_token.get_secret_value()}",
             "Accept": "application/json",
@@ -180,7 +183,7 @@ class HttpFoundryClient(FoundryClient):
         # If client error, raise RuntimeError to stop retries (unless we want to retry some 4xx?)
         # Generally 4xx are permanent errors.
         if 400 <= e.response.status_code < 500:
-             logger.error(f"Client error: {e.response.status_code} - {e.response.text}")
-             raise RuntimeError(f"Foundry API error: {e.response.status_code}") from e
+            logger.error(f"Client error: {e.response.status_code} - {e.response.text}")
+            raise RuntimeError(f"Foundry API error: {e.response.status_code}") from e
         # 5xx errors should bubble up as HTTPStatusError to trigger retry
         raise e

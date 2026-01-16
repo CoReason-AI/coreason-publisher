@@ -9,15 +9,17 @@
 # Source Code: https://github.com/CoReason-AI/coreason_publisher
 
 from typing import Optional
+
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class PublisherConfig(BaseSettings):
+class PublisherConfig(BaseSettings):  # type: ignore[misc]
     """
     Configuration for the Coreason Publisher.
     Reads from environment variables and .env file.
     """
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     # Thresholds

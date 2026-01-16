@@ -8,7 +8,6 @@
 #
 # Source Code: https://github.com/CoReason-AI/coreason_publisher
 
-import os
 from typing import Generator
 from unittest.mock import MagicMock, patch
 

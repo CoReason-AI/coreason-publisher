@@ -13,7 +13,7 @@ import urllib.parse
 from typing import Any, Dict
 
 import httpx
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from coreason_publisher.config import PublisherConfig
 from coreason_publisher.core.assay_client import AssayClient
@@ -43,11 +43,11 @@ class HttpAssayClient(AssayClient):
         # Normalize base_url to not have a trailing slash for easier concatenation
         self.base_url = self.config.assay_api_url.rstrip("/")
 
-    @retry(
+    @retry(  # type: ignore[misc]
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
         retry=retry_if_exception_type((httpx.RequestError, httpx.TimeoutException, httpx.HTTPStatusError)),
-        reraise=True
+        reraise=True,
     )
     def get_latest_report(self, project_id: str) -> Dict[str, Any]:
         """
@@ -66,6 +66,10 @@ class HttpAssayClient(AssayClient):
         encoded_project_id = urllib.parse.quote(project_id, safe="")
         url = f"{self.base_url}/projects/{encoded_project_id}/reports/latest"
         logger.info(f"Fetching latest assay report from {url}")
+
+        # Ensure token is present (it should be due to init check, but satisfy mypy)
+        if not self.config.assay_api_token:
+            raise ValueError("ASSAY_API_TOKEN missing")
 
         headers = {
             "Authorization": f"Bearer {self.config.assay_api_token.get_secret_value()}",
@@ -91,19 +95,16 @@ class HttpAssayClient(AssayClient):
                 return data
 
         except httpx.HTTPStatusError as e:
-            # Don't retry on 4xx errors (except maybe 429 which we aren't explicitly checking for yet, but let's assume standard behavior)
-            # Actually, retry_if_exception_type(httpx.HTTPStatusError) will retry ALL status errors.
-            # We probably want to exclude 400, 401, 403, 404 from retry.
+            # Don't retry on 4xx errors (except maybe 429 which we aren't explicitly checking for yet,
+            # but let's assume standard behavior)
             if 400 <= e.response.status_code < 500:
                 logger.error(f"Client error retrieving report: {e.response.status_code} - {e.response.text}")
                 # We can re-raise a different exception or let it bubble up.
                 # If we raise a RuntimeError here, it won't be caught by the retry logic if we configure it right,
                 # but currently retry catches HTTPStatusError.
-                # Let's just raise RuntimeError which is NOT in the retry list (Wait, it is not?)
-                # Ah, I added `retry_if_exception_type` with `httpx.HTTPStatusError`.
-                # I should refine the retry logic.
+                # Let's just raise RuntimeError which is NOT in the retry list.
                 raise RuntimeError(f"Failed to retrieve assay report: {e.response.status_code}") from e
-            raise # Let retry handle 5xx
+            raise  # Let retry handle 5xx
         except (httpx.RequestError, httpx.TimeoutException) as e:
             logger.warning(f"Network/Timeout error retrieving report: {e}. Retrying...")
             raise

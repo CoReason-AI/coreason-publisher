@@ -27,7 +27,7 @@ def mock_env(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
     yield
 
 
-@pytest.fixture
+@pytest.fixture  # type: ignore[misc]
 def publisher_config(mock_env: None) -> PublisherConfig:
     return PublisherConfig()
 
@@ -92,7 +92,7 @@ def test_get_latest_report_500(publisher_config: PublisherConfig) -> None:
         client = HttpAssayClient(publisher_config)
         # 500 triggers retry, so we expect it to fail after retries
         with pytest.raises(httpx.HTTPStatusError):
-             client.get_latest_report(project_id)
+            client.get_latest_report(project_id)
 
 
 def test_get_latest_report_connection_error(publisher_config: PublisherConfig) -> None:
