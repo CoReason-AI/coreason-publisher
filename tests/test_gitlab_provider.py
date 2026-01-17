@@ -15,6 +15,7 @@ from unittest.mock import MagicMock, patch
 import gitlab
 import pytest
 
+from coreason_publisher.config import PublisherConfig
 from coreason_publisher.core.gitlab_provider import GitLabProvider
 
 
@@ -26,14 +27,23 @@ def mock_gitlab() -> Generator[MagicMock, None, None]:
 
 @pytest.fixture  # type: ignore[misc]
 def provider(mock_gitlab: MagicMock) -> GitLabProvider:
-    with patch.dict(os.environ, {"GITLAB_TOKEN": "dummy_token"}):
-        return GitLabProvider(project_id="test/project")
+    config = PublisherConfig(gitlab_token="dummy_token")
+    return GitLabProvider(project_id="test/project", config=config)
 
 
 def test_init_raises_without_token() -> None:
-    with patch.dict(os.environ, {}, clear=True):
-        with pytest.raises(ValueError, match="GITLAB_TOKEN environment variable not set"):
-            GitLabProvider(project_id="test/project")
+    # Test with empty config
+    config = PublisherConfig()
+    with pytest.raises(ValueError, match="GITLAB_TOKEN not set in config"):
+        GitLabProvider(project_id="test/project", config=config)
+
+
+def test_init_with_none_config(mock_gitlab: MagicMock) -> None:
+    # Test fallback when config is None
+    # We need GITLAB_TOKEN in env for the fallback config to pick it up
+    with patch.dict(os.environ, {"GITLAB_TOKEN": "env_token"}):
+        provider = GitLabProvider(project_id="test/project", config=None)
+        assert provider.token == "env_token"
 
 
 def test_project_property(provider: GitLabProvider, mock_gitlab: MagicMock) -> None:

@@ -15,6 +15,7 @@ import httpx
 import pytest
 import respx
 
+from coreason_publisher.config import PublisherConfig
 from coreason_publisher.core.http_assay_client import HttpAssayClient
 
 
@@ -26,20 +27,30 @@ def mock_env(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
     yield
 
 
+@pytest.fixture  # type: ignore[misc]
+def publisher_config(mock_env: None) -> PublisherConfig:
+    return PublisherConfig()
+
+
 def test_init_raises_error_missing_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that __init__ raises ValueError if env vars are missing."""
     monkeypatch.delenv("ASSAY_API_URL", raising=False)
     monkeypatch.delenv("ASSAY_API_TOKEN", raising=False)
 
-    with pytest.raises(ValueError, match="ASSAY_API_URL environment variable not set"):
-        HttpAssayClient()
+    # Empty config
+    config = PublisherConfig()
+
+    with pytest.raises(ValueError, match="ASSAY_API_URL not set in config"):
+        HttpAssayClient(config)
 
     monkeypatch.setenv("ASSAY_API_URL", "http://test")
-    with pytest.raises(ValueError, match="ASSAY_API_TOKEN environment variable not set"):
-        HttpAssayClient()
+    config = PublisherConfig()
+
+    with pytest.raises(ValueError, match="ASSAY_API_TOKEN not set in config"):
+        HttpAssayClient(config)
 
 
-def test_get_latest_report_success(mock_env: None) -> None:
+def test_get_latest_report_success(publisher_config: PublisherConfig) -> None:
     """Test successful retrieval of assay report."""
     project_id = "test-project"
     expected_data = {"id": "123", "status": "passed"}
@@ -49,13 +60,13 @@ def test_get_latest_report_success(mock_env: None) -> None:
             return_value=httpx.Response(200, json=expected_data)
         )
 
-        client = HttpAssayClient()
+        client = HttpAssayClient(publisher_config)
         data = client.get_latest_report(project_id)
 
         assert data == expected_data
 
 
-def test_get_latest_report_404(mock_env: None) -> None:
+def test_get_latest_report_404(publisher_config: PublisherConfig) -> None:
     """Test retrieval when report is not found."""
     project_id = "unknown-project"
 
@@ -64,12 +75,12 @@ def test_get_latest_report_404(mock_env: None) -> None:
             return_value=httpx.Response(404, json={"error": "Not Found"})
         )
 
-        client = HttpAssayClient()
+        client = HttpAssayClient(publisher_config)
         with pytest.raises(RuntimeError, match="Failed to retrieve assay report: 404"):
             client.get_latest_report(project_id)
 
 
-def test_get_latest_report_500(mock_env: None) -> None:
+def test_get_latest_report_500(publisher_config: PublisherConfig) -> None:
     """Test retrieval when server errors."""
     project_id = "test-project"
 
@@ -78,12 +89,13 @@ def test_get_latest_report_500(mock_env: None) -> None:
             return_value=httpx.Response(500, json={"error": "Server Error"})
         )
 
-        client = HttpAssayClient()
-        with pytest.raises(RuntimeError, match="Failed to retrieve assay report: 500"):
+        client = HttpAssayClient(publisher_config)
+        # 500 triggers retry, so we expect it to fail after retries
+        with pytest.raises(httpx.HTTPStatusError):
             client.get_latest_report(project_id)
 
 
-def test_get_latest_report_connection_error(mock_env: None) -> None:
+def test_get_latest_report_connection_error(publisher_config: PublisherConfig) -> None:
     """Test retrieval when connection fails."""
     project_id = "test-project"
 
@@ -92,47 +104,48 @@ def test_get_latest_report_connection_error(mock_env: None) -> None:
             side_effect=httpx.ConnectError("Connection refused")
         )
 
-        client = HttpAssayClient()
-        with pytest.raises(RuntimeError, match="Network error retrieving report"):
+        client = HttpAssayClient(publisher_config)
+        # Connection error triggers retry
+        with pytest.raises(httpx.ConnectError):
             client.get_latest_report(project_id)
 
 
-def test_get_latest_report_unexpected_error(mock_env: None) -> None:
+def test_get_latest_report_unexpected_error(publisher_config: PublisherConfig) -> None:
     """Test retrieval when unexpected error occurs."""
     project_id = "test-project"
 
     # Mock httpx.Client to raise a generic Exception
     with mock.patch("httpx.Client", side_effect=Exception("Boom")):
-        client = HttpAssayClient()
+        client = HttpAssayClient(publisher_config)
         with pytest.raises(RuntimeError, match="Unexpected error retrieving report"):
             client.get_latest_report(project_id)
 
 
-def test_get_latest_report_timeout(mock_env: None) -> None:
+def test_get_latest_report_timeout(publisher_config: PublisherConfig) -> None:
     """Test retrieval when request times out."""
     project_id = "test-project"
 
     with respx.mock(base_url="https://api.assay.coreason.ai") as respx_mock:
         respx_mock.get(f"/projects/{project_id}/reports/latest").mock(side_effect=httpx.TimeoutException("Timeout"))
 
-        client = HttpAssayClient()
-        with pytest.raises(RuntimeError, match="Timeout retrieving assay report"):
+        client = HttpAssayClient(publisher_config)
+        with pytest.raises(httpx.TimeoutException):
             client.get_latest_report(project_id)
 
 
-def test_get_latest_report_invalid_json(mock_env: None) -> None:
+def test_get_latest_report_invalid_json(publisher_config: PublisherConfig) -> None:
     """Test retrieval when server returns invalid JSON."""
     project_id = "test-project"
 
     with respx.mock(base_url="https://api.assay.coreason.ai") as respx_mock:
         respx_mock.get(f"/projects/{project_id}/reports/latest").mock(return_value=httpx.Response(200, text="Not JSON"))
 
-        client = HttpAssayClient()
+        client = HttpAssayClient(publisher_config)
         with pytest.raises(RuntimeError, match="Invalid JSON response from server"):
             client.get_latest_report(project_id)
 
 
-def test_get_latest_report_non_dict_response(mock_env: None) -> None:
+def test_get_latest_report_non_dict_response(publisher_config: PublisherConfig) -> None:
     """Test retrieval when server returns a JSON list instead of a dict."""
     project_id = "test-project"
 
@@ -141,7 +154,7 @@ def test_get_latest_report_non_dict_response(mock_env: None) -> None:
             return_value=httpx.Response(200, json=[{"id": "1"}])
         )
 
-        client = HttpAssayClient()
+        client = HttpAssayClient(publisher_config)
         with pytest.raises(RuntimeError, match="Unexpected response format: expected dict, got list"):
             client.get_latest_report(project_id)
 
@@ -152,8 +165,9 @@ def test_get_latest_report_url_construction(mock_env: None, monkeypatch: pytest.
 
     # Test with trailing slash in env var
     monkeypatch.setenv("ASSAY_API_URL", "https://api.assay.coreason.ai/")
+    config = PublisherConfig()
 
-    client = HttpAssayClient()
+    client = HttpAssayClient(config)
     # Check internal base_url attribute is stripped
     assert client.base_url == "https://api.assay.coreason.ai"
 
@@ -164,7 +178,7 @@ def test_get_latest_report_url_construction(mock_env: None, monkeypatch: pytest.
         assert route.called
 
 
-def test_get_latest_report_special_chars_project_id(mock_env: None) -> None:
+def test_get_latest_report_special_chars_project_id(publisher_config: PublisherConfig) -> None:
     """Test that project ID is URL-encoded."""
     project_id = "group/subgroup/project"
     encoded_id = "group%2Fsubgroup%2Fproject"
@@ -173,6 +187,6 @@ def test_get_latest_report_special_chars_project_id(mock_env: None) -> None:
         # Expect the encoded URL
         route = respx_mock.get(f"/projects/{encoded_id}/reports/latest").mock(return_value=httpx.Response(200, json={}))
 
-        client = HttpAssayClient()
+        client = HttpAssayClient(publisher_config)
         client.get_latest_report(project_id)
         assert route.called
