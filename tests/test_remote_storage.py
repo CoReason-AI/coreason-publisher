@@ -8,14 +8,18 @@
 #
 # Source Code: https://github.com/CoReason-AI/coreason_publisher
 
-"""
-agent from Development (mutable drafts) to Production (immutable artifacts)
-"""
+from pathlib import Path
 
-__version__ = "0.1.0"
-__author__ = "Gowtham A Rao"
-__email__ = "gowtham.rao@coreason.ai"
+from coreason_publisher.core.remote_storage import MockStorageProvider
 
-from .main import app
 
-__all__ = ["app"]
+def test_mock_storage_provider_upload(tmp_path: Path) -> None:
+    """Test MockStorageProvider upload simulation."""
+    provider = MockStorageProvider()
+
+    file_path = tmp_path / "test_file.bin"
+    file_path.touch()
+
+    result = provider.upload(file_path)
+
+    assert result == "mock-hash-test_file.bin"

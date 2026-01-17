@@ -7,15 +7,3 @@
 # Commercial use beyond a 30-day trial requires a separate license.
 #
 # Source Code: https://github.com/CoReason-AI/coreason_publisher
-
-"""
-agent from Development (mutable drafts) to Production (immutable artifacts)
-"""
-
-__version__ = "0.1.0"
-__author__ = "Gowtham A Rao"
-__email__ = "gowtham.rao@coreason.ai"
-
-from .main import app
-
-__all__ = ["app"]
