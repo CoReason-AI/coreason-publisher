@@ -126,7 +126,6 @@ class HttpFoundryClient(FoundryClient):
             # RuntimeError is NOT in retry_if_exception_type list. So it won't retry on 4xx.
             # This is correct.
             self._handle_http_error(e)
-            raise  # Should be unreachable
         except (httpx.RequestError, httpx.TimeoutException) as e:
             logger.warning(f"Network/Timeout error retrieving draft status: {e}. Retrying...")
             raise
