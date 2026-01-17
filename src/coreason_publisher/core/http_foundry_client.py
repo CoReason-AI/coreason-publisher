@@ -135,7 +135,7 @@ class HttpFoundryClient(FoundryClient):
             logger.error(f"Unexpected error retrieving draft status: {e}")
             raise RuntimeError(f"Unexpected error retrieving draft status: {e}") from e
 
-        return ""  # Should be unreachable
+        return ""  # pragma: no cover
 
     def _post(self, url: str, payload: dict[str, Any]) -> None:
         """Helper to send POST requests."""
