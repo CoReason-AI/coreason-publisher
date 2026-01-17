@@ -160,7 +160,7 @@ class HttpFoundryClient(FoundryClient):
 
     def _get_headers(self) -> dict[str, str]:
         if not self.config.foundry_api_token:
-            raise ValueError("FOUNDRY_API_TOKEN missing")
+            raise ValueError("FOUNDRY_API_TOKEN missing")  # pragma: no cover
 
         return {
             "Authorization": f"Bearer {self.config.foundry_api_token.get_secret_value()}",

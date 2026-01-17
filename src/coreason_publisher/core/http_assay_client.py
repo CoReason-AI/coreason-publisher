@@ -69,7 +69,7 @@ class HttpAssayClient(AssayClient):
 
         # Ensure token is present (it should be due to init check, but satisfy mypy)
         if not self.config.assay_api_token:
-            raise ValueError("ASSAY_API_TOKEN missing")
+            raise ValueError("ASSAY_API_TOKEN missing")  # pragma: no cover
 
         headers = {
             "Authorization": f"Bearer {self.config.assay_api_token.get_secret_value()}",

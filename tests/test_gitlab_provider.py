@@ -8,6 +8,7 @@
 #
 # Source Code: https://github.com/CoReason-AI/coreason_publisher
 
+import os
 from typing import Generator
 from unittest.mock import MagicMock, patch
 
@@ -35,6 +36,14 @@ def test_init_raises_without_token() -> None:
     config = PublisherConfig()
     with pytest.raises(ValueError, match="GITLAB_TOKEN not set in config"):
         GitLabProvider(project_id="test/project", config=config)
+
+
+def test_init_with_none_config(mock_gitlab: MagicMock) -> None:
+    # Test fallback when config is None
+    # We need GITLAB_TOKEN in env for the fallback config to pick it up
+    with patch.dict(os.environ, {"GITLAB_TOKEN": "env_token"}):
+        provider = GitLabProvider(project_id="test/project", config=None)
+        assert provider.token == "env_token"
 
 
 def test_project_property(provider: GitLabProvider, mock_gitlab: MagicMock) -> None:
