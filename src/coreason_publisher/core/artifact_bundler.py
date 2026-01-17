@@ -8,10 +8,13 @@
 #
 # Source Code: https://github.com/CoReason-AI/coreason_publisher
 
+import json
 import shutil
 from pathlib import Path
 from typing import List
 
+from coreason_publisher.config import PublisherConfig
+from coreason_publisher.core.certificate_generator import CertificateGenerator
 from coreason_publisher.core.council_snapshot import CouncilSnapshot
 from coreason_publisher.core.git_lfs import GitLFS
 from coreason_publisher.core.remote_storage import RemoteStorageProvider
@@ -24,23 +27,22 @@ class ArtifactBundler:
     Handles Model Co-Location, LFS configuration, and Council Snapshots.
     """
 
-    # 100MB
-    LFS_THRESHOLD = 100 * 1024 * 1024
-    # 70GB
-    REMOTE_STORAGE_THRESHOLD = 70 * 1024 * 1024 * 1024
-
     MODEL_EXTENSIONS = {".safetensors", ".bin", ".pt"}
     MODEL_FILENAMES = {"adapter_config.json"}
 
     def __init__(
         self,
+        config: PublisherConfig,
         git_lfs: GitLFS,
         council_snapshot: CouncilSnapshot,
         storage_provider: RemoteStorageProvider,
+        certificate_generator: CertificateGenerator,
     ) -> None:
+        self.config = config
         self.git_lfs = git_lfs
         self.council_snapshot = council_snapshot
         self.storage_provider = storage_provider
+        self.certificate_generator = certificate_generator
 
     def bundle(self, workspace_path: Path) -> None:
         """
@@ -68,14 +70,38 @@ class ArtifactBundler:
         council_manifest = workspace_path / "council_manifest.lock"
         self.council_snapshot.create_snapshot(assay_report, council_manifest)
 
+        # 5. Generate Certificate of Analysis (CERTIFICATE.md)
+        self._generate_certificate(workspace_path, assay_report)
+
         logger.info("Bundling process completed successfully")
+
+    def _generate_certificate(self, workspace_path: Path, assay_report_path: Path) -> None:
+        """
+        Generates CERTIFICATE.md from the assay report.
+        """
+        logger.info(f"Generating CERTIFICATE.md from {assay_report_path}")
+        try:
+            with open(assay_report_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            certificate_content = self.certificate_generator.generate(data)
+            certificate_path = workspace_path / "CERTIFICATE.md"
+
+            with open(certificate_path, "w", encoding="utf-8") as f:
+                f.write(certificate_content)
+
+            logger.info(f"Generated {certificate_path}")
+        except Exception as e:
+            logger.error(f"Failed to generate CERTIFICATE.md: {e}")
+            raise RuntimeError(f"Failed to generate CERTIFICATE.md: {e}") from e
 
     def _handle_remote_storage(self, workspace_path: Path) -> None:
         """
         Scans for files larger than REMOTE_STORAGE_THRESHOLD.
         Uploads them via the storage provider and replaces them with a pointer.
         """
-        logger.info("Scanning for ultra-large files (>70GB)...")
+        threshold = self.config.remote_storage_threshold_bytes
+        logger.info(f"Scanning for ultra-large files (>{threshold} bytes)...")
         # Recursively find files
         for file_path in workspace_path.rglob("*"):
             try:
@@ -86,7 +112,7 @@ class ArtifactBundler:
                 if ".git" in file_path.parts:
                     continue
 
-                if file_path.stat().st_size > self.REMOTE_STORAGE_THRESHOLD:
+                if file_path.stat().st_size > threshold:
                     logger.info(f"Found ultra-large file: {file_path}")
                     remote_hash = self.storage_provider.upload(file_path)
 
@@ -148,7 +174,7 @@ class ArtifactBundler:
 
     def _configure_lfs(self, workspace_path: Path) -> None:
         """
-        Finds files > 100MB and tracks them with Git LFS.
+        Finds files > LFS_THRESHOLD and tracks them with Git LFS.
         """
         if not self.git_lfs.is_installed():
             logger.error("Git LFS is not installed.")
@@ -157,7 +183,8 @@ class ArtifactBundler:
         if not self.git_lfs.is_initialized(workspace_path):
             self.git_lfs.initialize(workspace_path)
 
-        large_files = self.git_lfs.find_large_files(workspace_path, self.LFS_THRESHOLD)
+        threshold = self.config.lfs_threshold_bytes
+        large_files = self.git_lfs.find_large_files(workspace_path, threshold)
 
         if large_files:
             # git lfs track takes patterns. We can pass exact relative paths.
