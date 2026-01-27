@@ -21,7 +21,8 @@ RUN python -m build --wheel --outdir /wheels
 FROM python:3.12-slim AS runtime
 
 # Install Git and Git LFS
-RUN apt-get update && apt-get install -y git git-lfs && git lfs install && rm -rf /var/lib/apt/lists/*
+# hadolint ignore=DL3008
+RUN apt-get update && apt-get install -y --no-install-recommends git git-lfs && git lfs install && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user
 RUN useradd --create-home --shell /bin/bash appuser

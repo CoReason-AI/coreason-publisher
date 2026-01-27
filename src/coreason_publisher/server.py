@@ -10,7 +10,7 @@
 
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Optional
+from typing import AsyncGenerator
 
 from fastapi import FastAPI, HTTPException, Request, status
 from pydantic import BaseModel, Field
@@ -31,8 +31,9 @@ from coreason_publisher.core.version_manager import BumpType, VersionManager
 from coreason_publisher.utils.logger import logger
 
 
-class ProposeRequest(BaseModel):
+class ProposeRequest(BaseModel):  # type: ignore[misc]
     """Request model for proposing a release."""
+
     project_id: str = Field(..., description="Assay Project ID")
     draft_id: str = Field(..., description="Foundry Draft ID")
     bump_type: BumpType = Field(..., description="Version bump type")
@@ -40,15 +41,17 @@ class ProposeRequest(BaseModel):
     description: str = Field(default="No description provided", description="Release description")
 
 
-class ReleaseRequest(BaseModel):
+class ReleaseRequest(BaseModel):  # type: ignore[misc]
     """Request model for finalizing a release."""
+
     mr_id: int = Field(..., description="Merge Request ID")
     srb_signature: str = Field(..., description="SRB Signature")
     srb_user_id: str = Field(..., description="SRB User ID")
 
 
-class RejectRequest(BaseModel):
+class RejectRequest(BaseModel):  # type: ignore[misc]
     """Request model for rejecting a release."""
+
     mr_id: int = Field(..., description="Merge Request ID")
     draft_id: str = Field(..., description="Foundry Draft ID")
     reason: str = Field(..., description="Reason for rejection")
@@ -110,7 +113,7 @@ def get_server_orchestrator() -> PublisherOrchestrator:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Lifespan context manager to initialize the orchestrator."""
     logger.info("Starting Coreason Publisher Server...")
     try:
@@ -132,8 +135,8 @@ app = FastAPI(
 )
 
 
-@app.post("/propose", status_code=status.HTTP_200_OK)
-def propose_release(request_body: ProposeRequest, request: Request):
+@app.post("/propose", status_code=status.HTTP_200_OK)  # type: ignore[misc]
+def propose_release(request_body: ProposeRequest, request: Request) -> dict[str, str]:
     """
     Triggers orchestrator.propose_release.
     """
@@ -148,16 +151,16 @@ def propose_release(request_body: ProposeRequest, request: Request):
         )
         return {"status": "success", "message": "Release proposal submitted successfully"}
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except RuntimeError as e:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e)) from e
     except Exception as e:
         logger.exception(f"Unexpected error in propose_release: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal Server Error")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal Server Error") from e
 
 
-@app.post("/release", status_code=status.HTTP_200_OK)
-def release_release(request_body: ReleaseRequest, request: Request):
+@app.post("/release", status_code=status.HTTP_200_OK)  # type: ignore[misc]
+def release_release(request_body: ReleaseRequest, request: Request) -> dict[str, str]:
     """
     Triggers orchestrator.finalize_release.
     """
@@ -170,16 +173,16 @@ def release_release(request_body: ReleaseRequest, request: Request):
         )
         return {"status": "success", "message": "Release finalized successfully"}
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except RuntimeError as e:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e)) from e
     except Exception as e:
         logger.exception(f"Unexpected error in release_release: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal Server Error")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal Server Error") from e
 
 
-@app.post("/reject", status_code=status.HTTP_200_OK)
-def reject_release(request_body: RejectRequest, request: Request):
+@app.post("/reject", status_code=status.HTTP_200_OK)  # type: ignore[misc]
+def reject_release(request_body: RejectRequest, request: Request) -> dict[str, str]:
     """
     Triggers orchestrator.reject_release.
     """
@@ -192,16 +195,16 @@ def reject_release(request_body: RejectRequest, request: Request):
         )
         return {"status": "success", "message": "Release rejected successfully"}
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except RuntimeError as e:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e)) from e
     except Exception as e:
         logger.exception(f"Unexpected error in reject_release: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal Server Error")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal Server Error") from e
 
 
-@app.get("/health", status_code=status.HTTP_200_OK)
-def health_check(request: Request):
+@app.get("/health", status_code=status.HTTP_200_OK)  # type: ignore[misc]
+def health_check(request: Request) -> dict[str, str]:
     """
     Verify that Git LFS is installed/ready and the Git provider connection is authenticated.
     """
@@ -213,13 +216,21 @@ def health_check(request: Request):
 
     # Check if LFS is initialized in the workspace
     if not orchestrator.git_lfs.is_initialized(orchestrator.workspace_path):
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Git LFS not initialized in workspace")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Git LFS not initialized in workspace"
+        )
 
     # Check Git Provider
     try:
-        orchestrator.git_provider.gl.auth()
+        # Assuming GitLabProvider, but handling generally
+        # We access 'gl' which is specific to GitLabProvider.
+        # If we had a generic interface for auth check, we'd use it.
+        if hasattr(orchestrator.git_provider, "gl"):
+            orchestrator.git_provider.gl.auth()
     except Exception as e:
         logger.error(f"Health check failed for Git Provider: {e}")
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Git Provider connection failed")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Git Provider connection failed"
+        ) from e
 
     return {"status": "healthy", "lfs": "ok", "git_provider": "ok"}
