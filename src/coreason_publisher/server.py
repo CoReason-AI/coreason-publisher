@@ -12,7 +12,11 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Annotated, cast
 
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from coreason_identity import IdentityManager
+from coreason_identity.config import CoreasonIdentityConfig
+from coreason_identity.models import UserContext
+from fastapi import Depends, FastAPI, HTTPException, Request, Security, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
 from coreason_publisher.config import PublisherConfig
@@ -55,6 +59,34 @@ def get_orch(request: Request) -> PublisherOrchestrator:
     return cast(PublisherOrchestrator, request.app.state.orchestrator)
 
 
+def get_user_context(
+    creds: Annotated[HTTPAuthorizationCredentials, Security(HTTPBearer())],
+) -> UserContext:
+    """
+    Dependency to validate the JWT and return UserContext.
+    Uses Coreason Identity middleware.
+    """
+    try:
+        # Initialize identity manager (assumes env vars are set)
+        config = CoreasonIdentityConfig()
+        manager = IdentityManager(config=config)
+        # validate_token expects "Bearer <token>" or just token?
+        # Looking at explore_identity_4.py result: validate_token(auth_header: str)
+        # HTTPAuthorizationCredentials.credentials is just the token part.
+        # But IdentityManager.validate_token typically parses "Bearer <token>".
+        # Let's reconstruct header or pass what it expects.
+        # If validate_token expects header string:
+        auth_header = f"Bearer {creds.credentials}"
+        return manager.validate_token(auth_header)
+    except Exception as e:
+        logger.error(f"Authentication failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from e
+
+
 # --- Models ---
 
 
@@ -62,14 +94,12 @@ class ProposeRequest(BaseModel):
     project_id: str
     draft_id: str
     bump_type: BumpType
-    user_id: str
     description: str = "No description provided"
 
 
 class ReleaseRequest(BaseModel):
     mr_id: int
     srb_signature: str
-    srb_user_id: str
 
 
 class RejectRequest(BaseModel):
@@ -83,7 +113,9 @@ class RejectRequest(BaseModel):
 
 @app.post("/propose", status_code=status.HTTP_202_ACCEPTED)
 def propose_release(
-    req: ProposeRequest, orchestrator: Annotated[PublisherOrchestrator, Depends(get_orch)]
+    req: ProposeRequest,
+    orchestrator: Annotated[PublisherOrchestrator, Depends(get_orch)],
+    user_context: Annotated[UserContext, Depends(get_user_context)],
 ) -> dict[str, str]:
     """
     Triggers orchestrator.propose_release.
@@ -94,7 +126,7 @@ def propose_release(
             project_id=req.project_id,
             foundry_draft_id=req.draft_id,
             bump_type=req.bump_type,
-            sre_user_id=req.user_id,
+            user_context=user_context,
             release_description=req.description,
         )
         return {"status": "Proposal submitted successfully"}
@@ -109,7 +141,9 @@ def propose_release(
 
 @app.post("/release", status_code=status.HTTP_200_OK)
 def finalize_release(
-    req: ReleaseRequest, orchestrator: Annotated[PublisherOrchestrator, Depends(get_orch)]
+    req: ReleaseRequest,
+    orchestrator: Annotated[PublisherOrchestrator, Depends(get_orch)],
+    user_context: Annotated[UserContext, Depends(get_user_context)],
 ) -> dict[str, str]:
     """
     Triggers orchestrator.finalize_release.
@@ -119,7 +153,7 @@ def finalize_release(
         orchestrator.finalize_release(
             mr_id=req.mr_id,
             srb_signature=req.srb_signature,
-            srb_user_id=req.srb_user_id,
+            user_context=user_context,
         )
         return {"status": "Release finalized successfully"}
     except ValueError as e:

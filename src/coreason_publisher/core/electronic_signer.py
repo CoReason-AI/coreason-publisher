@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import List
 
 from coreason_identity.models import UserContext
+
 from coreason_publisher.utils.logger import logger
 
 
@@ -137,6 +138,4 @@ class ElectronicSigner:
         Stub for sending audit data to Coreason Veritas.
         """
         # TODO: Implement actual API client
-        logger.info(
-            f"[VERITAS STUB] Sent audit: User={user_context.user_id}, Role={signer_role}, Sig={signature}"
-        )
+        logger.info(f"[VERITAS STUB] Sent audit: User={user_context.user_id}, Role={signer_role}, Sig={signature}")

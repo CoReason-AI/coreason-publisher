@@ -70,9 +70,7 @@ def test_propose_command_failure(mock_orchestrator: MagicMock, mock_user_context
     mock_orchestrator.propose_release.side_effect = RuntimeError("Something went wrong")
 
     with patch("coreason_publisher.main.get_cli_context", return_value=mock_user_context):
-        result = runner.invoke(
-            app, ["propose", "--project-id", "proj-1", "--draft-id", "draft-1", "--bump", "patch"]
-        )
+        result = runner.invoke(app, ["propose", "--project-id", "proj-1", "--draft-id", "draft-1", "--bump", "patch"])
 
     assert result.exit_code == 1
     assert "Error: Something went wrong" in result.stdout

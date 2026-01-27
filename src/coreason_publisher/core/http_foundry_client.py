@@ -14,10 +14,11 @@ from typing import Any, Optional
 
 import httpx
 from coreason_identity.models import UserContext
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+
 from coreason_publisher.config import PublisherConfig
 from coreason_publisher.core.foundry_client import FoundryClient
 from coreason_publisher.utils.logger import logger
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 
 class HttpFoundryClient(FoundryClient):

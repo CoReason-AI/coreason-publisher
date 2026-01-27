@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 
 from coreason_identity.models import UserContext
+
 from coreason_publisher.core.artifact_bundler import ArtifactBundler
 from coreason_publisher.core.assay_client import AssayClient
 from coreason_publisher.core.electronic_signer import ElectronicSigner
