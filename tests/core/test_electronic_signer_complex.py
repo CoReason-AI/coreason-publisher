@@ -16,7 +16,7 @@ import pytest
 from coreason_publisher.core.electronic_signer import ElectronicSigner
 
 
-@pytest.fixture  # type: ignore[misc]
+@pytest.fixture
 def signer() -> ElectronicSigner:
     return ElectronicSigner()
 

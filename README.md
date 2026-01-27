@@ -11,6 +11,8 @@ coreason-publisher is the "Final Gatekeeper" of the CoReason platform. It orches
 
 It solves the "Big AI" problem in GxP environments. Agents are not just code; they are a complex dependency of Logic (Prompts), Evidence (Test Results), and Binary Assets (Fine-Tuned Weights). This package bundles these diverse assets into a verifiable package, manages the **Git LFS (Large File Storage)** pointers for heavy models, and enforces a strict **Two-Stage Governance Workflow** (Submission $\to$ SRB Approval) before any code reaches production.
 
+It can be run as a **CLI tool** for local development or as a **Centralized Service** (REST API) for platform integration.
+
 ## Functional Philosophy
 
 The agent must implement the **Package-Propose-Approve-Merge Loop**:
@@ -22,6 +24,7 @@ The agent must implement the **Package-Propose-Approve-Merge Loop**:
 
 ## Key Features
 
+-   **Governance Service (API):** Exposes REST endpoints (`/propose`, `/release`) for Foundry/Assay integration.
 -   **Artifact Bundling:** Aggregates code, data, and models into a single deployment folder.
 -   **Git LFS Management:** Automatically handles large files and model weights.
 -   **Governance as Code:** Blocks merges until a cryptographically signed SRB approval is received.
@@ -52,9 +55,19 @@ cd coreason_publisher
 poetry install
 ```
 
-### Basic Usage
+### Server Mode
 
-To propose a new release (as an SRE):
+Run the service via Docker:
+
+```bash
+docker run -p 8000:8000 \
+  -e GITLAB_TOKEN="<token>" \
+  coreason-publisher:latest
+```
+
+### CLI Usage
+
+To propose a new release locally:
 
 ```bash
 poetry run python -m coreason_publisher.main propose \

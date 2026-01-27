@@ -17,6 +17,23 @@ repos:
     rev: v1.18.2
     hooks:
       - id: mypy
+        additional_dependencies:
+          - types-requests
+          - types-PyYAML
+          - fastapi
+          - pydantic
+          - pydantic-settings
+          - typer
+          - gitpython
+          - python-gitlab
+          - tenacity
+          - uvicorn
+          - python-multipart
+          - loguru
+          - httpx
+          - jinja2
+          - respx
+          - pytest
   - repo: https://github.com/AleksaC/hadolint-py
     rev: v2.14.0
     hooks:

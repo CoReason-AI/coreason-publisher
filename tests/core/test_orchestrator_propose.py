@@ -26,7 +26,7 @@ from coreason_publisher.core.orchestrator import PublisherOrchestrator
 from coreason_publisher.core.version_manager import BumpType, VersionManager
 
 
-@pytest.fixture  # type: ignore[misc]
+@pytest.fixture
 def mock_dependencies() -> dict[str, MagicMock]:
     return {
         "assay_client": MagicMock(spec=AssayClient),

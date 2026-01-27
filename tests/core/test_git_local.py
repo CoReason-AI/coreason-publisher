@@ -20,7 +20,7 @@ from coreason_publisher.core.git_local import GitLocal
 # Existing integration-style tests
 
 
-@pytest.fixture  # type: ignore[misc]
+@pytest.fixture
 def temp_git_repo(tmp_path: Path) -> Path:
     """Creates a temporary git repository."""
     repo_dir = tmp_path / "test_repo"
