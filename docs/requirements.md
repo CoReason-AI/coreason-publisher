@@ -4,7 +4,7 @@
 Domain: Release Management, GxP Governance, & MLOps
 Architectural Role: The Regulatory Gatekeeper & Artifact Packager
 Core Philosophy: "Code \+ Weights \+ Evidence \= The Release. Nothing merges without SRB Signature."
-Dependencies: coreason-foundry (Drafts), coreason-assay (Evidence), coreason-vault (Secrets), GitLab/GitHub API (Upstream)
+Dependencies: coreason-foundry (Drafts), coreason-assay (Evidence), coreason-vault (Secrets), GitLab/GitHub API (Upstream), FastAPI, Uvicorn
 
 ## ---
 
@@ -83,8 +83,12 @@ The agent must implement the **Package-Propose-Approve-Merge Loop**:
 * **coreason-foundry (The UI):**
   * Needs submit\_for\_review(draft\_id, type) endpoint.
   * Needs approve\_release(mr\_id, signature) endpoint.
+  * *New:* Can interact via REST API (`POST /propose`, `POST /release`, `POST /reject`).
 * **coreason-assay:**
   * Publisher pulls the *latest* Passing Report. If the code has changed since the last test, it rejects the submission.
+* **Server Runtime:**
+  * **FastAPI + Uvicorn:** High-concurrency async server for handling webhooks/API requests.
+  * **System Dependencies:** `git` and `git-lfs` must be present in the environment (e.g., Docker container).
 
 ## ---
 

@@ -45,7 +45,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 app = FastAPI(
     title="Coreason Publisher API",
     description="Governance & Release Service",
-    version="0.2.0",
+    version="0.3.0",
     lifespan=lifespan,
 )
 
