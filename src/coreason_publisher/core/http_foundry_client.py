@@ -10,9 +10,10 @@
 
 import json
 import urllib.parse
-from typing import Any
+from typing import Any, Optional
 
 import httpx
+from coreason_identity.models import UserContext
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from coreason_publisher.config import PublisherConfig
@@ -49,14 +50,14 @@ class HttpFoundryClient(FoundryClient):
         retry=retry_if_exception_type((httpx.RequestError, httpx.TimeoutException, httpx.HTTPStatusError)),
         reraise=True,
     )
-    def submit_for_review(self, draft_id: str, type: str) -> None:
+    def submit_for_review(self, draft_id: str, type: str, user_context: UserContext) -> None:
         """Submits a draft for review."""
         encoded_draft_id = urllib.parse.quote(draft_id, safe="")
         url = f"{self.base_url}/drafts/{encoded_draft_id}/submit"
         logger.info(f"Submitting draft {draft_id} for review (type={type})")
 
         payload = {"type": type}
-        self._post(url, payload)
+        self._post(url, payload, user_context=user_context)
 
     @retry(
         stop=stop_after_attempt(3),
@@ -64,13 +65,13 @@ class HttpFoundryClient(FoundryClient):
         retry=retry_if_exception_type((httpx.RequestError, httpx.TimeoutException, httpx.HTTPStatusError)),
         reraise=True,
     )
-    def approve_release(self, mr_id: int, signature: str) -> None:
+    def approve_release(self, mr_id: int, signature: str, user_context: UserContext) -> None:
         """Approves a release."""
         url = f"{self.base_url}/merge-requests/{mr_id}/approve"
         logger.info(f"Approving release for MR {mr_id}")
 
         payload = {"signature": signature}
-        self._post(url, payload)
+        self._post(url, payload, user_context=user_context)
 
     @retry(
         stop=stop_after_attempt(3),
@@ -137,9 +138,9 @@ class HttpFoundryClient(FoundryClient):
 
         return ""  # pragma: no cover
 
-    def _post(self, url: str, payload: dict[str, Any]) -> None:
+    def _post(self, url: str, payload: dict[str, Any], user_context: Optional[UserContext] = None) -> None:
         """Helper to send POST requests."""
-        headers = self._get_headers()
+        headers = self._get_headers(user_context)
         try:
             with httpx.Client() as client:
                 response = client.post(url, json=payload, headers=headers, timeout=30.0)
@@ -159,12 +160,22 @@ class HttpFoundryClient(FoundryClient):
             logger.error(f"Unexpected error during POST to {url}: {e}")
             raise RuntimeError(f"Unexpected error during POST to {url}: {e}") from e
 
-    def _get_headers(self) -> dict[str, str]:
-        if not self.config.foundry_api_token:
-            raise ValueError("FOUNDRY_API_TOKEN missing")  # pragma: no cover
+    def _get_headers(self, user_context: Optional[UserContext] = None) -> dict[str, str]:
+        token = None
+        if user_context and user_context.downstream_token:
+            # Check if it is a SecretStr or string
+            if hasattr(user_context.downstream_token, "get_secret_value"):
+                token = user_context.downstream_token.get_secret_value()
+            else:
+                token = str(user_context.downstream_token)
+        elif self.config.foundry_api_token:
+            token = self.config.foundry_api_token.get_secret_value()
+
+        if not token:
+            raise ValueError("Authentication token missing (neither user context nor service token available)")
 
         return {
-            "Authorization": f"Bearer {self.config.foundry_api_token.get_secret_value()}",
+            "Authorization": f"Bearer {token}",
             "Accept": "application/json",
             "Content-Type": "application/json",
         }

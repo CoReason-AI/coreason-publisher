@@ -11,6 +11,8 @@
 import json
 from pathlib import Path
 
+from coreason_identity.models import UserContext
+
 from coreason_publisher.core.artifact_bundler import ArtifactBundler
 from coreason_publisher.core.assay_client import AssayClient
 from coreason_publisher.core.electronic_signer import ElectronicSigner
@@ -54,7 +56,7 @@ class PublisherOrchestrator:
         project_id: str,
         foundry_draft_id: str,
         bump_type: BumpType,
-        sre_user_id: str,
+        user_context: UserContext,
         release_description: str,
     ) -> None:
         """
@@ -72,7 +74,7 @@ class PublisherOrchestrator:
             project_id: The Assay project ID to fetch report from.
             foundry_draft_id: The Foundry draft ID to link.
             bump_type: The type of version bump (patch, minor, major).
-            sre_user_id: The ID of the SRE proposing the release.
+            user_context: The context of the SRE proposing the release.
             release_description: Description for the MR and changelog.
         """
         logger.info(f"Starting release proposal for project {project_id} (Draft: {foundry_draft_id})")
@@ -106,11 +108,11 @@ class PublisherOrchestrator:
         # Note: ElectronicSigner hashes the *files on disk* that match the pattern, excluding .git
         # So we can hash before or after staging, but before commit makes sense.
 
-        signature = self.electronic_signer.create_signature(self.workspace_path, sre_user_id)
+        signature = self.electronic_signer.create_signature(self.workspace_path, user_context)
 
         commit_message = self.electronic_signer.format_commit_message(
             original_message=f"chore(release): propose {next_version}\n\n{release_description}",
-            user_id=sre_user_id,
+            user_context=user_context,
             signature=signature,
             signer_role="SRE",
         )
@@ -119,7 +121,7 @@ class PublisherOrchestrator:
         self.git_local.commit(commit_message)
 
         # Send audit to Veritas
-        self.electronic_signer.send_audit_to_veritas(sre_user_id, signature, "SRE")
+        self.electronic_signer.send_audit_to_veritas(user_context, signature, "SRE")
 
         # 5. Push
         # Enforce strict LFS verification before push to prevent pushing heavy artifacts without pointers
@@ -130,7 +132,7 @@ class PublisherOrchestrator:
         mr_title = f"Release {next_version}"
         mr_description = (
             f"Release Candidate: {next_version}\n"
-            f"Proposer: {sre_user_id}\n"
+            f"Proposer: {user_context.user_id}\n"
             f"Signature: {signature}\n\n"
             f"Description: {release_description}"
         )
@@ -156,14 +158,14 @@ class PublisherOrchestrator:
         # Type might be 'release_candidate' or similar.
         # PRD says: "SRE releases an agent... Selects 'Submit Release' -> 'Minor Version'"
         # Let's assume type="release".
-        self.foundry_client.submit_for_review(foundry_draft_id, type="release")
+        self.foundry_client.submit_for_review(foundry_draft_id, type="release", user_context=user_context)
 
         # Post comment to MR linking the draft? (Optional, not in PRD but good practice)
         self.git_provider.post_comment(mr_id, f"Linked Foundry Draft: {foundry_draft_id}")
 
         logger.info(f"Release proposal completed. MR: {mr_id}, Version: {next_version}")
 
-    def finalize_release(self, mr_id: int, srb_signature: str, srb_user_id: str) -> None:
+    def finalize_release(self, mr_id: int, srb_signature: str, user_context: UserContext) -> None:
         """
         Orchestrates the 'Release' phase.
 
@@ -175,7 +177,7 @@ class PublisherOrchestrator:
         Args:
             mr_id: The Merge Request ID.
             srb_signature: The cryptographic signature provided by the SRB.
-            srb_user_id: The ID of the SRB member approving the release.
+            user_context: The context of the SRB member approving the release.
         """
         logger.info(f"Finalizing release for MR {mr_id}")
 
@@ -185,7 +187,7 @@ class PublisherOrchestrator:
             raise ValueError("Signature verification failed. The artifact does not match the SRB signature.")
 
         # Send audit to Veritas
-        self.electronic_signer.send_audit_to_veritas(srb_user_id, srb_signature, "SRB")
+        self.electronic_signer.send_audit_to_veritas(user_context, srb_signature, "SRB")
 
         # 2. Get Version for Tag
         # We assume the workspace is currently on the candidate branch
@@ -202,7 +204,7 @@ class PublisherOrchestrator:
         self.git_provider.create_tag(tag_name=current_version, ref="main", message=f"Release {current_version}")
 
         # 5. Notify Foundry
-        self.foundry_client.approve_release(mr_id, srb_signature)
+        self.foundry_client.approve_release(mr_id, srb_signature, user_context)
 
         logger.info(f"Release {current_version} finalized successfully.")
 

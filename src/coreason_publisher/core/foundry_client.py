@@ -10,18 +10,21 @@
 
 from abc import ABC, abstractmethod
 
+from coreason_identity.models import UserContext
+
 
 class FoundryClient(ABC):
     """Abstract base class for interacting with the CoReason Foundry service."""
 
     @abstractmethod
-    def submit_for_review(self, draft_id: str, type: str) -> None:
+    def submit_for_review(self, draft_id: str, type: str, user_context: UserContext) -> None:
         """
         Submits a draft for review.
 
         Args:
             draft_id: The ID of the draft to submit.
             type: The type of release (e.g., 'minor', 'patch').
+            user_context: The user context of the submitter.
 
         Raises:
             RuntimeError: If the submission fails.
@@ -29,13 +32,14 @@ class FoundryClient(ABC):
         pass  # pragma: no cover
 
     @abstractmethod
-    def approve_release(self, mr_id: int, signature: str) -> None:
+    def approve_release(self, mr_id: int, signature: str, user_context: UserContext) -> None:
         """
         Approves a release.
 
         Args:
             mr_id: The ID of the merge request associated with the release.
             signature: The cryptographic signature approving the release.
+            user_context: The user context of the approver.
 
         Raises:
             RuntimeError: If the approval fails.
