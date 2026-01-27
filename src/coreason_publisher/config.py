@@ -39,6 +39,10 @@ class PublisherConfig(BaseSettings):  # type: ignore[misc]
     gitlab_token: Optional[SecretStr] = Field(default=None, description="GitLab Private Token")
     gitlab_project_id: Optional[str] = Field(default=None, description="GitLab Project ID")
 
+    # Server Configuration
+    server_port: int = Field(default=8000, description="Server Port")
+    workers: int = Field(default=1, description="Number of workers")
+
     @property
     def lfs_threshold_bytes(self) -> int:
         """Returns the LFS threshold in bytes."""
