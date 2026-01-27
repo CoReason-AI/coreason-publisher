@@ -16,12 +16,12 @@ import pytest
 from coreason_publisher.core.certificate_generator import CertificateGenerator
 
 
-@pytest.fixture  # type: ignore
+@pytest.fixture
 def generator() -> CertificateGenerator:
     return CertificateGenerator()
 
 
-@pytest.fixture  # type: ignore
+@pytest.fixture
 def valid_report() -> Dict[str, Any]:
     return {
         "council": {"proposer": "gpt-4-0613", "judge": "claude-3-opus-20240229"},

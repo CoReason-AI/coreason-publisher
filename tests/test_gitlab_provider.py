@@ -14,20 +14,21 @@ from unittest.mock import MagicMock, patch
 
 import gitlab
 import pytest
+from pydantic import SecretStr
 
 from coreason_publisher.config import PublisherConfig
 from coreason_publisher.core.gitlab_provider import GitLabProvider
 
 
-@pytest.fixture  # type: ignore[misc]
+@pytest.fixture
 def mock_gitlab() -> Generator[MagicMock, None, None]:
     with patch("coreason_publisher.core.gitlab_provider.gitlab.Gitlab") as mock:
         yield mock
 
 
-@pytest.fixture  # type: ignore[misc]
+@pytest.fixture
 def provider(mock_gitlab: MagicMock) -> GitLabProvider:
-    config = PublisherConfig(gitlab_token="dummy_token")
+    config = PublisherConfig(gitlab_token=SecretStr("dummy_token"))
     return GitLabProvider(project_id="test/project", config=config)
 
 

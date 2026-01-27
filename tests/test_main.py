@@ -25,7 +25,7 @@ from coreason_publisher.main import app, get_orchestrator, main
 runner = CliRunner()
 
 
-@pytest.fixture  # type: ignore[misc]
+@pytest.fixture
 def mock_orchestrator() -> Generator[MagicMock, None, None]:
     with patch("coreason_publisher.main.get_orchestrator") as mock_get:
         mock_orch_instance = MagicMock(spec=PublisherOrchestrator)

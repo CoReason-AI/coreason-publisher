@@ -19,7 +19,7 @@ from coreason_publisher.config import PublisherConfig
 from coreason_publisher.core.http_assay_client import HttpAssayClient
 
 
-@pytest.fixture  # type: ignore[misc]
+@pytest.fixture
 def mock_env(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
     """Sets up environment variables for testing."""
     monkeypatch.setenv("ASSAY_API_URL", "https://api.assay.coreason.ai")
@@ -27,7 +27,7 @@ def mock_env(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
     yield
 
 
-@pytest.fixture  # type: ignore[misc]
+@pytest.fixture
 def publisher_config(mock_env: None) -> PublisherConfig:
     return PublisherConfig()
 
