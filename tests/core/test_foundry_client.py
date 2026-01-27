@@ -14,6 +14,7 @@ from unittest.mock import patch
 import httpx
 import pytest
 import respx
+from coreason_identity.models import UserContext
 from httpx import Response
 
 from coreason_publisher.config import PublisherConfig
@@ -29,7 +30,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> HttpFoundryClient:
 
 
 @respx.mock
-def test_submit_for_review_success(client: HttpFoundryClient) -> None:
+def test_submit_for_review_success(client: HttpFoundryClient, mock_user_context: UserContext) -> None:
     draft_id = "draft-123"
     type_ = "minor"
 
@@ -37,16 +38,17 @@ def test_submit_for_review_success(client: HttpFoundryClient) -> None:
         return_value=Response(200, json={"message": "submitted"})
     )
 
-    client.submit_for_review(draft_id, type_)
+    client.submit_for_review(draft_id, type_, mock_user_context)
 
     assert route.called
-    assert route.calls.last.request.headers["Authorization"] == "Bearer test-token"
+    # Expects user context token (fake-token) not service token (test-token)
+    assert route.calls.last.request.headers["Authorization"] == "Bearer fake-token"
     # Compare parsed JSON to avoid formatting issues
     assert json.loads(route.calls.last.request.read()) == {"type": "minor"}
 
 
 @respx.mock
-def test_submit_for_review_failure(client: HttpFoundryClient) -> None:
+def test_submit_for_review_failure(client: HttpFoundryClient, mock_user_context: UserContext) -> None:
     draft_id = "draft-123"
 
     respx.post(f"https://api.foundry.com/drafts/{draft_id}/submit").mock(
@@ -71,11 +73,11 @@ def test_submit_for_review_failure(client: HttpFoundryClient) -> None:
     # I set reraise=True.
 
     with pytest.raises(httpx.HTTPStatusError):
-        client.submit_for_review(draft_id, "patch")
+        client.submit_for_review(draft_id, "patch", mock_user_context)
 
 
 @respx.mock
-def test_approve_release_success(client: HttpFoundryClient) -> None:
+def test_approve_release_success(client: HttpFoundryClient, mock_user_context: UserContext) -> None:
     mr_id = 456
     signature = "sig-abc-123"
 
@@ -83,15 +85,16 @@ def test_approve_release_success(client: HttpFoundryClient) -> None:
         return_value=Response(200, json={"message": "approved"})
     )
 
-    client.approve_release(mr_id, signature)
+    client.approve_release(mr_id, signature, mock_user_context)
 
     assert route.called
-    assert route.calls.last.request.headers["Authorization"] == "Bearer test-token"
+    # Expects user context token
+    assert route.calls.last.request.headers["Authorization"] == "Bearer fake-token"
     assert json.loads(route.calls.last.request.read()) == {"signature": "sig-abc-123"}
 
 
 @respx.mock
-def test_approve_release_failure(client: HttpFoundryClient) -> None:
+def test_approve_release_failure(client: HttpFoundryClient, mock_user_context: UserContext) -> None:
     mr_id = 456
 
     respx.post(f"https://api.foundry.com/merge-requests/{mr_id}/approve").mock(
@@ -99,7 +102,7 @@ def test_approve_release_failure(client: HttpFoundryClient) -> None:
     )
 
     with pytest.raises(RuntimeError, match="Foundry API error: 404"):
-        client.approve_release(mr_id, "sig")
+        client.approve_release(mr_id, "sig", mock_user_context)
 
 
 @respx.mock
@@ -159,17 +162,17 @@ def test_get_draft_status_http_error(client: HttpFoundryClient) -> None:
 
 
 @respx.mock
-def test_timeout_error(client: HttpFoundryClient) -> None:
+def test_timeout_error(client: HttpFoundryClient, mock_user_context: UserContext) -> None:
     draft_id = "draft-timeout"
 
     respx.post(f"https://api.foundry.com/drafts/{draft_id}/submit").mock(side_effect=httpx.TimeoutException("timeout"))
 
     with pytest.raises(httpx.TimeoutException):
-        client.submit_for_review(draft_id, "minor")
+        client.submit_for_review(draft_id, "minor", mock_user_context)
 
 
 @respx.mock
-def test_network_error(client: HttpFoundryClient) -> None:
+def test_network_error(client: HttpFoundryClient, mock_user_context: UserContext) -> None:
     draft_id = "draft-net-error"
 
     respx.post(f"https://api.foundry.com/drafts/{draft_id}/submit").mock(
@@ -177,7 +180,7 @@ def test_network_error(client: HttpFoundryClient) -> None:
     )
 
     with pytest.raises(httpx.RequestError):
-        client.submit_for_review(draft_id, "minor")
+        client.submit_for_review(draft_id, "minor", mock_user_context)
 
 
 def test_missing_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -197,7 +200,7 @@ def test_missing_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @respx.mock
-def test_post_unexpected_exception(client: HttpFoundryClient) -> None:
+def test_post_unexpected_exception(client: HttpFoundryClient, mock_user_context: UserContext) -> None:
     # Test unexpected exception in _post, catching generic Exception
     # We can mock httpx.Client to raise something unexpected
 
@@ -215,7 +218,7 @@ def test_post_unexpected_exception(client: HttpFoundryClient) -> None:
 
     with pytest.raises(RuntimeError, match="Unexpected error during POST"):
         with patch("httpx.Client.post", side_effect=Exception("Boom")):
-            client.submit_for_review(draft_id, type_)
+            client.submit_for_review(draft_id, type_, mock_user_context)
 
 
 @respx.mock
@@ -243,7 +246,7 @@ def test_get_draft_status_runtime_error_reraise(client: HttpFoundryClient) -> No
 
 
 @respx.mock
-def test_url_encoding(client: HttpFoundryClient) -> None:
+def test_url_encoding(client: HttpFoundryClient, mock_user_context: UserContext) -> None:
     """Test that draft IDs with special characters are correctly encoded."""
     draft_id = "group/project/draft#1"
     # Expected encoding: group%2Fproject%2Fdraft%231
@@ -253,7 +256,7 @@ def test_url_encoding(client: HttpFoundryClient) -> None:
         return_value=Response(200, json={"message": "ok"})
     )
 
-    client.submit_for_review(draft_id, "minor")
+    client.submit_for_review(draft_id, "minor", mock_user_context)
 
     assert route.called
     # httpx.URL.path returns decoded path. We need to check raw_path to verify encoding.
@@ -295,7 +298,7 @@ def test_status_type_conversion(client: HttpFoundryClient) -> None:
 
 
 @respx.mock
-def test_empty_arguments(client: HttpFoundryClient) -> None:
+def test_empty_arguments(client: HttpFoundryClient, mock_user_context: UserContext) -> None:
     """Test calling methods with empty strings."""
     draft_id = ""
     # urllib.parse.quote("") is ""
@@ -304,7 +307,7 @@ def test_empty_arguments(client: HttpFoundryClient) -> None:
     respx.post("https://api.foundry.com/drafts//submit").mock(return_value=Response(404, json={"error": "Not Found"}))
 
     with pytest.raises(RuntimeError, match="Foundry API error: 404"):
-        client.submit_for_review(draft_id, "minor")
+        client.submit_for_review(draft_id, "minor", mock_user_context)
 
 
 @respx.mock

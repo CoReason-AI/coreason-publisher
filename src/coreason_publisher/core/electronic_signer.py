@@ -14,6 +14,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List
 
+from coreason_identity.models import UserContext
+
 from coreason_publisher.utils.logger import logger
 
 
@@ -83,13 +85,13 @@ class ElectronicSigner:
         logger.debug(f"Bundle hash: {final_hash}")
         return final_hash
 
-    def create_signature(self, bundle_path: Path, user_id: str) -> str:
+    def create_signature(self, bundle_path: Path, user_context: UserContext) -> str:
         """
         Creates a 'signature' for the bundle.
         In this iteration, it returns the bundle hash.
         Future iterations will perform cryptographic signing.
         """
-        logger.info(f"Creating signature for {bundle_path} by {user_id}")
+        logger.info(f"Creating signature for {bundle_path} by {user_context.user_id}")
         return self.calculate_bundle_hash(bundle_path)
 
     def verify_signature(self, bundle_path: Path, signature: str) -> bool:
@@ -106,14 +108,17 @@ class ElectronicSigner:
 
         return is_valid
 
-    def format_commit_message(self, original_message: str, user_id: str, signature: str, signer_role: str) -> str:
+    def format_commit_message(
+        self, original_message: str, user_context: UserContext, signature: str, signer_role: str
+    ) -> str:
         """
         Injects the audit trail into the Git commit message.
         """
         timestamp = datetime.now(timezone.utc).isoformat()
 
         audit_trail = {
-            "signer_id": user_id,
+            "signer_id": user_context.user_id,
+            "signer_email": user_context.email,
             "signer_role": signer_role,
             "signature": signature,
             "timestamp": timestamp,
@@ -128,9 +133,9 @@ class ElectronicSigner:
         )
         return formatted_message
 
-    def send_audit_to_veritas(self, user_id: str, signature: str, signer_role: str) -> None:
+    def send_audit_to_veritas(self, user_context: UserContext, signature: str, signer_role: str) -> None:
         """
         Stub for sending audit data to Coreason Veritas.
         """
         # TODO: Implement actual API client
-        logger.info(f"[VERITAS STUB] Sent audit: User={user_id}, Role={signer_role}, Sig={signature}")
+        logger.info(f"[VERITAS STUB] Sent audit: User={user_context.user_id}, Role={signer_role}, Sig={signature}")

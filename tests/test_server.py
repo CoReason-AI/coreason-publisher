@@ -13,9 +13,10 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+from coreason_identity.models import UserContext
 from fastapi.testclient import TestClient
 
-from coreason_publisher.server import app
+from coreason_publisher.server import app, get_user_context
 
 
 @pytest.fixture
@@ -27,11 +28,17 @@ def mock_orchestrator() -> MagicMock:
 
 
 @pytest.fixture
-def client(mock_orchestrator: MagicMock) -> Generator[TestClient, Any, None]:
+def client(mock_orchestrator: MagicMock, mock_user_context: UserContext) -> Generator[TestClient, Any, None]:
     # Patch get_orchestrator used in lifespan to return our mock
+    # Use dependency_overrides for FastAPI dependencies
+    app.dependency_overrides[get_user_context] = lambda: mock_user_context
+
     with patch("coreason_publisher.server.get_orchestrator", return_value=mock_orchestrator):
         with TestClient(app) as client:
             yield client
+
+    # Cleanup overrides
+    app.dependency_overrides = {}
 
 
 def test_health_check_success(client: TestClient, mock_orchestrator: MagicMock) -> None:
@@ -60,12 +67,13 @@ def test_health_check_provider_failure(client: TestClient, mock_orchestrator: Ma
 # --- Propose Release Tests ---
 
 
-def test_propose_release_success(client: TestClient, mock_orchestrator: MagicMock) -> None:
+def test_propose_release_success(
+    client: TestClient, mock_orchestrator: MagicMock, mock_user_context: UserContext
+) -> None:
     payload = {
         "project_id": "proj-1",
         "draft_id": "draft-1",
         "bump_type": "patch",
-        "user_id": "user-1",
         "description": "desc",
     }
     response = client.post("/propose", json=payload)
@@ -74,7 +82,7 @@ def test_propose_release_success(client: TestClient, mock_orchestrator: MagicMoc
         project_id="proj-1",
         foundry_draft_id="draft-1",
         bump_type="patch",
-        sre_user_id="user-1",
+        user_context=mock_user_context,
         release_description="desc",
     )
 
@@ -85,7 +93,6 @@ def test_propose_release_value_error(client: TestClient, mock_orchestrator: Magi
         "project_id": "proj-1",
         "draft_id": "draft-1",
         "bump_type": "patch",
-        "user_id": "user-1",
         "description": "desc",
     }
     response = client.post("/propose", json=payload)
@@ -99,7 +106,6 @@ def test_propose_release_runtime_error(client: TestClient, mock_orchestrator: Ma
         "project_id": "proj-1",
         "draft_id": "draft-1",
         "bump_type": "patch",
-        "user_id": "user-1",
         "description": "desc",
     }
     response = client.post("/propose", json=payload)
@@ -113,7 +119,6 @@ def test_propose_release_exception(client: TestClient, mock_orchestrator: MagicM
         "project_id": "proj-1",
         "draft_id": "draft-1",
         "bump_type": "patch",
-        "user_id": "user-1",
         "description": "desc",
     }
     response = client.post("/propose", json=payload)
@@ -124,16 +129,20 @@ def test_propose_release_exception(client: TestClient, mock_orchestrator: MagicM
 # --- Finalize Release Tests ---
 
 
-def test_finalize_release_success(client: TestClient, mock_orchestrator: MagicMock) -> None:
-    payload = {"mr_id": 123, "srb_signature": "sig", "srb_user_id": "user-2"}
+def test_finalize_release_success(
+    client: TestClient, mock_orchestrator: MagicMock, mock_user_context: UserContext
+) -> None:
+    payload = {"mr_id": 123, "srb_signature": "sig"}
     response = client.post("/release", json=payload)
     assert response.status_code == 200
-    mock_orchestrator.finalize_release.assert_called_once_with(mr_id=123, srb_signature="sig", srb_user_id="user-2")
+    mock_orchestrator.finalize_release.assert_called_once_with(
+        mr_id=123, srb_signature="sig", user_context=mock_user_context
+    )
 
 
 def test_finalize_release_value_error(client: TestClient, mock_orchestrator: MagicMock) -> None:
     mock_orchestrator.finalize_release.side_effect = ValueError("Invalid signature")
-    payload = {"mr_id": 123, "srb_signature": "sig", "srb_user_id": "user-2"}
+    payload = {"mr_id": 123, "srb_signature": "sig"}
     response = client.post("/release", json=payload)
     assert response.status_code == 400
     assert "Invalid signature" in response.json()["detail"]
@@ -141,7 +150,7 @@ def test_finalize_release_value_error(client: TestClient, mock_orchestrator: Mag
 
 def test_finalize_release_runtime_error(client: TestClient, mock_orchestrator: MagicMock) -> None:
     mock_orchestrator.finalize_release.side_effect = RuntimeError("Merge failed")
-    payload = {"mr_id": 123, "srb_signature": "sig", "srb_user_id": "user-2"}
+    payload = {"mr_id": 123, "srb_signature": "sig"}
     response = client.post("/release", json=payload)
     assert response.status_code == 502
     assert "Merge failed" in response.json()["detail"]
@@ -149,7 +158,7 @@ def test_finalize_release_runtime_error(client: TestClient, mock_orchestrator: M
 
 def test_finalize_release_exception(client: TestClient, mock_orchestrator: MagicMock) -> None:
     mock_orchestrator.finalize_release.side_effect = Exception("Crash")
-    payload = {"mr_id": 123, "srb_signature": "sig", "srb_user_id": "user-2"}
+    payload = {"mr_id": 123, "srb_signature": "sig"}
     response = client.post("/release", json=payload)
     assert response.status_code == 500
     assert "Crash" in response.json()["detail"]

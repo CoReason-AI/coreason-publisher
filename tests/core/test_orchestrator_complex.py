@@ -13,6 +13,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from coreason_identity.models import UserContext
 
 from coreason_publisher.core.artifact_bundler import ArtifactBundler
 
@@ -41,7 +42,9 @@ def mock_deps_with_real_signer() -> dict[str, Any]:
     }
 
 
-def test_release_tampered_bundle_integration(tmp_path: Path, mock_deps_with_real_signer: dict[str, Any]) -> None:
+def test_release_tampered_bundle_integration(
+    tmp_path: Path, mock_deps_with_real_signer: dict[str, Any], mock_user_context: UserContext
+) -> None:
     """
     Integration test:
     1. Bundle is signed (hash calculated).
@@ -60,7 +63,7 @@ def test_release_tampered_bundle_integration(tmp_path: Path, mock_deps_with_real
     # 1. Sign (Simulate SRE signing in Propose phase)
     # We manually call create_signature to get the valid signature
     signer: ElectronicSigner = deps["electronic_signer"]
-    valid_signature = signer.create_signature(workspace_path, "sre-user")
+    valid_signature = signer.create_signature(workspace_path, mock_user_context)
 
     # Setup mocks for release
     deps["version_manager"].get_current_version.return_value = "v1.0.0"
@@ -70,13 +73,15 @@ def test_release_tampered_bundle_integration(tmp_path: Path, mock_deps_with_real
 
     # 3. Finalize Release
     with pytest.raises(ValueError, match="Signature verification failed"):
-        orchestrator.finalize_release(mr_id=123, srb_signature=valid_signature, srb_user_id="srb-user")
+        orchestrator.finalize_release(mr_id=123, srb_signature=valid_signature, user_context=mock_user_context)
 
     # Verify no merge happened
     deps["git_provider"].merge_merge_request.assert_not_called()
 
 
-def test_release_valid_bundle_integration(tmp_path: Path, mock_deps_with_real_signer: dict[str, Any]) -> None:
+def test_release_valid_bundle_integration(
+    tmp_path: Path, mock_deps_with_real_signer: dict[str, Any], mock_user_context: UserContext
+) -> None:
     """
     Integration test:
     1. Bundle is signed.
@@ -91,10 +96,10 @@ def test_release_valid_bundle_integration(tmp_path: Path, mock_deps_with_real_si
 
     orchestrator = PublisherOrchestrator(workspace_path, **deps)
     signer: ElectronicSigner = deps["electronic_signer"]
-    valid_signature = signer.create_signature(workspace_path, "sre-user")
+    valid_signature = signer.create_signature(workspace_path, mock_user_context)
 
     deps["version_manager"].get_current_version.return_value = "v1.0.0"
 
-    orchestrator.finalize_release(mr_id=123, srb_signature=valid_signature, srb_user_id="srb-user")
+    orchestrator.finalize_release(mr_id=123, srb_signature=valid_signature, user_context=mock_user_context)
 
     deps["git_provider"].merge_merge_request.assert_called_once_with(123)
