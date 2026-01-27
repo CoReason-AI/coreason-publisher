@@ -13,11 +13,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from coreason_identity.models import UserContext
 
 from coreason_publisher.core.electronic_signer import ElectronicSigner
 
 
-@pytest.fixture  # type: ignore[misc]
+@pytest.fixture
 def signer() -> ElectronicSigner:
     return ElectronicSigner()
 
@@ -110,13 +111,13 @@ def test_calculate_bundle_hash_read_error(signer: ElectronicSigner, tmp_path: Pa
         assert "Failed to read file" in str(excinfo.value)
 
 
-def test_create_and_verify_signature(signer: ElectronicSigner, tmp_path: Path) -> None:
+def test_create_and_verify_signature(signer: ElectronicSigner, tmp_path: Path, mock_user_context: UserContext) -> None:
     """Test the signature creation and verification flow."""
     dir1 = tmp_path / "dir1"
     dir1.mkdir()
     (dir1 / "file1.txt").write_text("content")
 
-    sig = signer.create_signature(dir1, "user123")
+    sig = signer.create_signature(dir1, mock_user_context)
     assert signer.verify_signature(dir1, sig)
 
     # Modify content and verify failure
@@ -124,18 +125,17 @@ def test_create_and_verify_signature(signer: ElectronicSigner, tmp_path: Path) -
     assert not signer.verify_signature(dir1, sig)
 
 
-def test_format_commit_message(signer: ElectronicSigner) -> None:
+def test_format_commit_message(signer: ElectronicSigner, mock_user_context: UserContext) -> None:
     """Test that the commit message is formatted correctly with audit trail."""
     original_msg = "feat: add new model"
-    user_id = "user123"
     role = "SRE"
     signature = "abcdef123456"
 
-    formatted = signer.format_commit_message(original_msg, user_id, signature, role)
+    formatted = signer.format_commit_message(original_msg, mock_user_context, signature, role)
 
     assert original_msg in formatted
     assert "--- COREASON AUDIT TRAIL ---" in formatted
-    assert user_id in formatted
+    assert mock_user_context.user_id in formatted
     assert role in formatted
     assert signature in formatted
 
@@ -148,12 +148,13 @@ def test_format_commit_message(signer: ElectronicSigner) -> None:
     json_str = formatted[start_idx:end_idx]
     data = json.loads(json_str)
 
-    assert data["signer_id"] == user_id
+    assert data["signer_id"] == mock_user_context.user_id
+    assert data["signer_email"] == mock_user_context.email
     assert data["signature"] == signature
     assert data["compliance"] == "21 CFR Part 11"
 
 
-def test_send_audit_to_veritas(signer: ElectronicSigner) -> None:
+def test_send_audit_to_veritas(signer: ElectronicSigner, mock_user_context: UserContext) -> None:
     """Test the stub for sending audit data to Veritas."""
     # Just call it to ensure no exceptions and coverage
-    signer.send_audit_to_veritas("user123", "sig123", "SRE")
+    signer.send_audit_to_veritas(mock_user_context, "sig123", "SRE")

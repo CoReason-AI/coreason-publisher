@@ -14,6 +14,7 @@ from typing import Generator
 from unittest.mock import MagicMock, patch
 
 import pytest
+from coreason_identity.models import UserContext
 from typer import Exit
 from typer.testing import CliRunner
 
@@ -25,7 +26,7 @@ from coreason_publisher.main import app, get_orchestrator, main
 runner = CliRunner()
 
 
-@pytest.fixture  # type: ignore[misc]
+@pytest.fixture
 def mock_orchestrator() -> Generator[MagicMock, None, None]:
     with patch("coreason_publisher.main.get_orchestrator") as mock_get:
         mock_orch_instance = MagicMock(spec=PublisherOrchestrator)
@@ -33,24 +34,23 @@ def mock_orchestrator() -> Generator[MagicMock, None, None]:
         yield mock_orch_instance
 
 
-def test_propose_command(mock_orchestrator: MagicMock) -> None:
+def test_propose_command(mock_orchestrator: MagicMock, mock_user_context: UserContext) -> None:
     """Test the propose command calls the orchestrator correctly."""
-    result = runner.invoke(
-        app,
-        [
-            "propose",
-            "--project-id",
-            "proj-1",
-            "--draft-id",
-            "draft-1",
-            "--bump",
-            "minor",
-            "--user-id",
-            "sre-1",
-            "--description",
-            "test release",
-        ],
-    )
+    with patch("coreason_publisher.main.get_cli_context", return_value=mock_user_context):
+        result = runner.invoke(
+            app,
+            [
+                "propose",
+                "--project-id",
+                "proj-1",
+                "--draft-id",
+                "draft-1",
+                "--bump",
+                "minor",
+                "--description",
+                "test release",
+            ],
+        )
 
     assert result.exit_code == 0
     assert "Release proposal submitted successfully" in result.stdout
@@ -61,39 +61,40 @@ def test_propose_command(mock_orchestrator: MagicMock) -> None:
     assert call_kwargs["foundry_draft_id"] == "draft-1"
     # When passed from Typer, it comes as the Enum member
     assert call_kwargs["bump_type"] == BumpType.MINOR
-    assert call_kwargs["sre_user_id"] == "sre-1"
+    assert call_kwargs["user_context"] == mock_user_context
     assert call_kwargs["release_description"] == "test release"
 
 
-def test_propose_command_failure(mock_orchestrator: MagicMock) -> None:
+def test_propose_command_failure(mock_orchestrator: MagicMock, mock_user_context: UserContext) -> None:
     """Test the propose command handles exceptions."""
     mock_orchestrator.propose_release.side_effect = RuntimeError("Something went wrong")
 
-    result = runner.invoke(
-        app, ["propose", "--project-id", "proj-1", "--draft-id", "draft-1", "--bump", "patch", "--user-id", "u"]
-    )
+    with patch("coreason_publisher.main.get_cli_context", return_value=mock_user_context):
+        result = runner.invoke(app, ["propose", "--project-id", "proj-1", "--draft-id", "draft-1", "--bump", "patch"])
 
     assert result.exit_code == 1
     assert "Error: Something went wrong" in result.stdout
 
 
-def test_release_command(mock_orchestrator: MagicMock) -> None:
+def test_release_command(mock_orchestrator: MagicMock, mock_user_context: UserContext) -> None:
     """Test the release command calls the orchestrator correctly."""
-    result = runner.invoke(app, ["release", "--mr-id", "123", "--signature", "valid-sig", "--srb-user-id", "srb-1"])
+    with patch("coreason_publisher.main.get_cli_context", return_value=mock_user_context):
+        result = runner.invoke(app, ["release", "--mr-id", "123", "--signature", "valid-sig"])
 
     assert result.exit_code == 0
     assert "Release finalized successfully" in result.stdout
 
     mock_orchestrator.finalize_release.assert_called_once_with(
-        mr_id=123, srb_signature="valid-sig", srb_user_id="srb-1"
+        mr_id=123, srb_signature="valid-sig", user_context=mock_user_context
     )
 
 
-def test_release_command_failure(mock_orchestrator: MagicMock) -> None:
+def test_release_command_failure(mock_orchestrator: MagicMock, mock_user_context: UserContext) -> None:
     """Test the release command handles exceptions."""
     mock_orchestrator.finalize_release.side_effect = ValueError("Invalid signature")
 
-    result = runner.invoke(app, ["release", "--mr-id", "123", "--signature", "bad-sig", "--srb-user-id", "srb-1"])
+    with patch("coreason_publisher.main.get_cli_context", return_value=mock_user_context):
+        result = runner.invoke(app, ["release", "--mr-id", "123", "--signature", "bad-sig"])
 
     assert result.exit_code == 1
     assert "Error: Invalid signature" in result.stdout

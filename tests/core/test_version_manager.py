@@ -18,12 +18,12 @@ from coreason_publisher.core.git_provider import GitProvider
 from coreason_publisher.core.version_manager import BumpType, VersionManager
 
 
-@pytest.fixture  # type: ignore[misc]
+@pytest.fixture
 def mock_git_provider() -> Generator[MagicMock, None, None]:
     yield MagicMock(spec=GitProvider)
 
 
-@pytest.fixture  # type: ignore[misc]
+@pytest.fixture
 def version_manager(mock_git_provider: MagicMock) -> Generator[VersionManager, None, None]:
     yield VersionManager(mock_git_provider)
 

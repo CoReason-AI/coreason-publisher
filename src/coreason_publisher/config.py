@@ -14,13 +14,17 @@ from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class PublisherConfig(BaseSettings):  # type: ignore[misc]
+class PublisherConfig(BaseSettings):
     """
     Configuration for the Coreason Publisher.
     Reads from environment variables and .env file.
     """
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    # Server Configuration
+    server_port: int = Field(default=8000, description="Port for the API server")
+    workers: int = Field(default=1, description="Number of worker processes")
 
     # Thresholds
     lfs_threshold_mb: int = Field(default=100, description="Threshold for Git LFS in MB")
