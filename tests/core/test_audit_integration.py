@@ -13,6 +13,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from coreason_identity.models import UserContext
 
 from coreason_publisher.core.artifact_bundler import ArtifactBundler
 from coreason_publisher.core.assay_client import AssayClient
@@ -39,7 +40,9 @@ def mock_deps() -> dict[str, MagicMock]:
     }
 
 
-def test_audit_failure_blocks_release(tmp_path: Path, mock_deps: dict[str, Any]) -> None:
+def test_audit_failure_blocks_release(
+    tmp_path: Path, mock_deps: dict[str, Any], mock_user_context: UserContext
+) -> None:
     """
     Edge Case: If the audit system is down (raises exception),
     the release finalization must abort immediately.
@@ -56,7 +59,7 @@ def test_audit_failure_blocks_release(tmp_path: Path, mock_deps: dict[str, Any])
 
     # Execute
     with pytest.raises(RuntimeError, match="Veritas Down"):
-        orchestrator.finalize_release(mr_id=123, srb_signature="sig", srb_user_id="user")
+        orchestrator.finalize_release(mr_id=123, srb_signature="sig", user_context=mock_user_context)
 
     # Verify side effects are blocked
     deps["git_provider"].merge_merge_request.assert_not_called()
@@ -64,7 +67,9 @@ def test_audit_failure_blocks_release(tmp_path: Path, mock_deps: dict[str, Any])
     deps["foundry_client"].approve_release.assert_not_called()
 
 
-def test_audit_failure_blocks_proposal_push(tmp_path: Path, mock_deps: dict[str, Any]) -> None:
+def test_audit_failure_blocks_proposal_push(
+    tmp_path: Path, mock_deps: dict[str, Any], mock_user_context: UserContext
+) -> None:
     """
     Edge Case: If the audit system is down during proposal,
     the system must NOT push the candidate branch or open an MR.
@@ -86,7 +91,7 @@ def test_audit_failure_blocks_proposal_push(tmp_path: Path, mock_deps: dict[str,
             project_id="p",
             foundry_draft_id="d",
             bump_type=BumpType.PATCH,
-            sre_user_id="sre",
+            user_context=mock_user_context,
             release_description="desc",
         )
 
@@ -97,11 +102,7 @@ def test_audit_failure_blocks_proposal_push(tmp_path: Path, mock_deps: dict[str,
 
 def test_empty_srb_user_id_rejected(tmp_path: Path, mock_deps: dict[str, Any]) -> None:
     """
-    Edge Case: Empty SRB User ID should theoretically be caught.
-    Currently, the code passes it through.
-    This test verifies that it IS passed to the audit log as-is,
-    checking strict data piping.
-    (If we added validation, this test would change to assert rejection).
+    Edge Case: UserContext with empty user_id should be passed through.
     """
     deps = mock_deps
     workspace_path = tmp_path
@@ -110,14 +111,18 @@ def test_empty_srb_user_id_rejected(tmp_path: Path, mock_deps: dict[str, Any]) -
     deps["electronic_signer"].verify_signature.return_value = True
     deps["version_manager"].get_current_version.return_value = "v1.0.0"
 
-    # Execute with empty string
-    orchestrator.finalize_release(mr_id=123, srb_signature="sig", srb_user_id="")
+    empty_context = UserContext(user_id="", email="test@example.com", groups=[], scopes=[], claims={})
+
+    # Execute with empty context
+    orchestrator.finalize_release(mr_id=123, srb_signature="sig", user_context=empty_context)
 
     # Verify it was passed to audit
-    deps["electronic_signer"].send_audit_to_veritas.assert_called_once_with("", "sig", "SRB")
+    deps["electronic_signer"].send_audit_to_veritas.assert_called_once_with(empty_context, "sig", "SRB")
 
 
-def test_complex_audit_sequence_verification(tmp_path: Path, mock_deps: dict[str, Any]) -> None:
+def test_complex_audit_sequence_verification(
+    tmp_path: Path, mock_deps: dict[str, Any], mock_user_context: UserContext
+) -> None:
     """
     Complex Scenario: Verify the exact order of critical operations.
     1. Verify Signature
@@ -141,7 +146,7 @@ def test_complex_audit_sequence_verification(tmp_path: Path, mock_deps: dict[str
     manager.attach_mock(deps["git_provider"].create_tag, "tag")
     manager.attach_mock(deps["foundry_client"].approve_release, "approve")
 
-    orchestrator.finalize_release(mr_id=123, srb_signature="sig", srb_user_id="srb-user")
+    orchestrator.finalize_release(mr_id=123, srb_signature="sig", user_context=mock_user_context)
 
     # Verify order
     # Note: call_args_list includes call objects.
