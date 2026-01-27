@@ -9,7 +9,7 @@
 # Source Code: https://github.com/CoReason-AI/coreason_publisher
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 
 import typer
 
@@ -34,12 +34,17 @@ app = typer.Typer(
 )
 
 
-def get_orchestrator() -> PublisherOrchestrator:
+def get_orchestrator(
+    workspace_path: Optional[Path] = None, config: Optional[PublisherConfig] = None
+) -> PublisherOrchestrator:
     """Dependency Injection for the Orchestrator."""
     try:
-        workspace_path = Path.cwd()
+        if workspace_path is None:
+            workspace_path = Path.cwd()
+
         # PublisherConfig now reads from environment variables
-        config = PublisherConfig()
+        if config is None:
+            config = PublisherConfig()
 
         # Infrastructure
         git_local = GitLocal(workspace_path)
@@ -95,7 +100,7 @@ def get_orchestrator() -> PublisherOrchestrator:
         raise typer.Exit(code=1) from e
 
 
-@app.command()  # type: ignore[misc]
+@app.command()
 def propose(
     project_id: Annotated[str, typer.Option("--project-id", "-p", help="Assay Project ID")],
     draft_id: Annotated[str, typer.Option("--draft-id", "-d", help="Foundry Draft ID")],
@@ -126,7 +131,7 @@ def propose(
         raise typer.Exit(code=1) from e
 
 
-@app.command()  # type: ignore[misc]
+@app.command()
 def release(
     mr_id: Annotated[int, typer.Option("--mr-id", help="Merge Request ID")],
     signature: Annotated[str, typer.Option("--signature", help="SRB Signature")],
@@ -147,7 +152,7 @@ def release(
         raise typer.Exit(code=1) from e
 
 
-@app.command()  # type: ignore[misc]
+@app.command()
 def reject(
     mr_id: Annotated[int, typer.Option("--mr-id", help="Merge Request ID")],
     draft_id: Annotated[str, typer.Option("--draft-id", "-d", help="Foundry Draft ID")],

@@ -27,7 +27,7 @@ from coreason_publisher.core.orchestrator import PublisherOrchestrator
 from coreason_publisher.core.version_manager import VersionManager
 
 
-@pytest.fixture  # type: ignore[misc]
+@pytest.fixture
 def mock_deps_with_real_signer() -> dict[str, Any]:
     return {
         "assay_client": MagicMock(spec=AssayClient),

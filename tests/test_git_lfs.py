@@ -11,6 +11,7 @@
 import re
 import subprocess
 from pathlib import Path
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -18,7 +19,7 @@ import pytest
 from coreason_publisher.core.git_lfs import GitLFS
 
 
-@pytest.fixture  # type: ignore[misc]
+@pytest.fixture
 def git_lfs() -> GitLFS:
     return GitLFS()
 
@@ -322,7 +323,7 @@ def test_find_large_files_oserror_on_stat(git_lfs: GitLFS, tmp_path: Path) -> No
     mock_path.is_symlink.return_value = False
     mock_path.stat.side_effect = OSError("Permission denied")
     # Mypy complains about assigning to return_value of __str__
-    mock_path.__str__.return_value = str(tmp_path / "protected.bin")  # type: ignore[attr-defined]
+    cast(MagicMock, mock_path.__str__).return_value = str(tmp_path / "protected.bin")
 
     with patch.object(Path, "rglob", return_value=[mock_path]):
         # Should catch OSError and log warning, returning empty list (or list of successful ones)

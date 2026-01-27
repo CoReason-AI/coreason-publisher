@@ -28,6 +28,59 @@ Set the following environment variables (or configure them via `.env`):
 
 - `GITLAB_TOKEN`: Your GitLab API token.
 - `GITLAB_PROJECT_ID`: The ID of the GitLab project.
+- `SERVER_PORT`: Port for the API server (default: 8000).
+- `WORKERS`: Number of worker processes (default: 1).
+
+## Server Mode (REST API)
+
+`coreason-publisher` can now run as a centralized governance service.
+
+### Running the Server
+
+**Using Docker:**
+```bash
+docker run -p 8000:8000 \
+  -e GITLAB_TOKEN="<token>" \
+  -e GITLAB_PROJECT_ID="<id>" \
+  coreason-publisher:latest
+```
+
+**Using Uvicorn:**
+```bash
+poetry run uvicorn coreason_publisher.server:app --host 0.0.0.0 --port 8000
+```
+
+### API Endpoints
+
+- **POST /propose**
+  Triggers a release proposal (SRE).
+  ```bash
+  curl -X POST http://localhost:8000/propose \
+       -H "Content-Type: application/json" \
+       -d '{"project_id": "123", "draft_id": "draft-456", "bump_type": "minor", "user_id": "sre-user", "description": "New features"}'
+  ```
+
+- **POST /release**
+  Finalizes a release (SRB).
+  ```bash
+  curl -X POST http://localhost:8000/release \
+       -H "Content-Type: application/json" \
+       -d '{"mr_id": 789, "srb_signature": "sig-hash", "srb_user_id": "srb-user"}'
+  ```
+
+- **POST /reject**
+  Rejects a release.
+  ```bash
+  curl -X POST http://localhost:8000/reject \
+       -H "Content-Type: application/json" \
+       -d '{"mr_id": 789, "draft_id": "draft-456", "reason": "Audit failed"}'
+  ```
+
+- **GET /health**
+  Checks system health (LFS, GitLab connection).
+  ```bash
+  curl http://localhost:8000/health
+  ```
 
 ## CLI Commands
 

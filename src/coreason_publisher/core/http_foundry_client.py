@@ -43,7 +43,7 @@ class HttpFoundryClient(FoundryClient):
         # Normalize base_url to not have a trailing slash for easier concatenation
         self.base_url = self.config.foundry_api_url.rstrip("/")
 
-    @retry(  # type: ignore[misc]
+    @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
         retry=retry_if_exception_type((httpx.RequestError, httpx.TimeoutException, httpx.HTTPStatusError)),
@@ -58,7 +58,7 @@ class HttpFoundryClient(FoundryClient):
         payload = {"type": type}
         self._post(url, payload)
 
-    @retry(  # type: ignore[misc]
+    @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
         retry=retry_if_exception_type((httpx.RequestError, httpx.TimeoutException, httpx.HTTPStatusError)),
@@ -72,7 +72,7 @@ class HttpFoundryClient(FoundryClient):
         payload = {"signature": signature}
         self._post(url, payload)
 
-    @retry(  # type: ignore[misc]
+    @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
         retry=retry_if_exception_type((httpx.RequestError, httpx.TimeoutException, httpx.HTTPStatusError)),
@@ -87,7 +87,7 @@ class HttpFoundryClient(FoundryClient):
         payload = {"reason": reason}
         self._post(url, payload)
 
-    @retry(  # type: ignore[misc]
+    @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
         retry=retry_if_exception_type((httpx.RequestError, httpx.TimeoutException, httpx.HTTPStatusError)),

@@ -22,12 +22,12 @@ from coreason_publisher.core.git_lfs import GitLFS
 from coreason_publisher.core.remote_storage import MockStorageProvider
 
 
-@pytest.fixture  # type: ignore[misc]
+@pytest.fixture
 def mock_config() -> PublisherConfig:
     return PublisherConfig(lfs_threshold_mb=100, remote_storage_threshold_mb=70 * 1024)
 
 
-@pytest.fixture  # type: ignore[misc]
+@pytest.fixture
 def mock_git_lfs() -> MagicMock:
     lfs = MagicMock(spec=GitLFS)
     lfs.is_installed.return_value = True
@@ -36,24 +36,24 @@ def mock_git_lfs() -> MagicMock:
     return lfs
 
 
-@pytest.fixture  # type: ignore[misc]
+@pytest.fixture
 def mock_council_snapshot() -> MagicMock:
     return MagicMock(spec=CouncilSnapshot)
 
 
-@pytest.fixture  # type: ignore[misc]
+@pytest.fixture
 def mock_storage_provider() -> MagicMock:
     return MagicMock(spec=MockStorageProvider)
 
 
-@pytest.fixture  # type: ignore[misc]
+@pytest.fixture
 def mock_certificate_generator() -> MagicMock:
     mock = MagicMock(spec=CertificateGenerator)
     mock.generate.return_value = "# Certificate of Analysis\n\nPASSED"
     return mock
 
 
-@pytest.fixture  # type: ignore[misc]
+@pytest.fixture
 def artifact_bundler(
     mock_config: PublisherConfig,
     mock_git_lfs: MagicMock,

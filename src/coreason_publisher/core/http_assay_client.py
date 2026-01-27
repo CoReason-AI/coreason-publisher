@@ -43,7 +43,7 @@ class HttpAssayClient(AssayClient):
         # Normalize base_url to not have a trailing slash for easier concatenation
         self.base_url = self.config.assay_api_url.rstrip("/")
 
-    @retry(  # type: ignore[misc]
+    @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
         retry=retry_if_exception_type((httpx.RequestError, httpx.TimeoutException, httpx.HTTPStatusError)),

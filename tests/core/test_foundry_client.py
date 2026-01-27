@@ -20,7 +20,7 @@ from coreason_publisher.config import PublisherConfig
 from coreason_publisher.core.http_foundry_client import HttpFoundryClient
 
 
-@pytest.fixture  # type: ignore[misc]
+@pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch) -> HttpFoundryClient:
     monkeypatch.setenv("FOUNDRY_API_URL", "https://api.foundry.com")
     monkeypatch.setenv("FOUNDRY_API_TOKEN", "test-token")
@@ -28,7 +28,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> HttpFoundryClient:
     return HttpFoundryClient(config)
 
 
-@respx.mock  # type: ignore[misc]
+@respx.mock
 def test_submit_for_review_success(client: HttpFoundryClient) -> None:
     draft_id = "draft-123"
     type_ = "minor"
@@ -45,7 +45,7 @@ def test_submit_for_review_success(client: HttpFoundryClient) -> None:
     assert json.loads(route.calls.last.request.read()) == {"type": "minor"}
 
 
-@respx.mock  # type: ignore[misc]
+@respx.mock
 def test_submit_for_review_failure(client: HttpFoundryClient) -> None:
     draft_id = "draft-123"
 
@@ -74,7 +74,7 @@ def test_submit_for_review_failure(client: HttpFoundryClient) -> None:
         client.submit_for_review(draft_id, "patch")
 
 
-@respx.mock  # type: ignore[misc]
+@respx.mock
 def test_approve_release_success(client: HttpFoundryClient) -> None:
     mr_id = 456
     signature = "sig-abc-123"
@@ -90,7 +90,7 @@ def test_approve_release_success(client: HttpFoundryClient) -> None:
     assert json.loads(route.calls.last.request.read()) == {"signature": "sig-abc-123"}
 
 
-@respx.mock  # type: ignore[misc]
+@respx.mock
 def test_approve_release_failure(client: HttpFoundryClient) -> None:
     mr_id = 456
 
@@ -102,7 +102,7 @@ def test_approve_release_failure(client: HttpFoundryClient) -> None:
         client.approve_release(mr_id, "sig")
 
 
-@respx.mock  # type: ignore[misc]
+@respx.mock
 def test_get_draft_status_success(client: HttpFoundryClient) -> None:
     draft_id = "draft-789"
 
@@ -114,7 +114,7 @@ def test_get_draft_status_success(client: HttpFoundryClient) -> None:
     assert status == "PENDING_SRB"
 
 
-@respx.mock  # type: ignore[misc]
+@respx.mock
 def test_get_draft_status_missing_field(client: HttpFoundryClient) -> None:
     draft_id = "draft-789"
 
@@ -126,7 +126,7 @@ def test_get_draft_status_missing_field(client: HttpFoundryClient) -> None:
         client.get_draft_status(draft_id)
 
 
-@respx.mock  # type: ignore[misc]
+@respx.mock
 def test_get_draft_status_invalid_json(client: HttpFoundryClient) -> None:
     draft_id = "draft-789"
 
@@ -136,7 +136,7 @@ def test_get_draft_status_invalid_json(client: HttpFoundryClient) -> None:
         client.get_draft_status(draft_id)
 
 
-@respx.mock  # type: ignore[misc]
+@respx.mock
 def test_get_draft_status_not_dict(client: HttpFoundryClient) -> None:
     draft_id = "draft-789"
 
@@ -148,7 +148,7 @@ def test_get_draft_status_not_dict(client: HttpFoundryClient) -> None:
         client.get_draft_status(draft_id)
 
 
-@respx.mock  # type: ignore[misc]
+@respx.mock
 def test_get_draft_status_http_error(client: HttpFoundryClient) -> None:
     draft_id = "draft-789"
 
@@ -158,7 +158,7 @@ def test_get_draft_status_http_error(client: HttpFoundryClient) -> None:
         client.get_draft_status(draft_id)
 
 
-@respx.mock  # type: ignore[misc]
+@respx.mock
 def test_timeout_error(client: HttpFoundryClient) -> None:
     draft_id = "draft-timeout"
 
@@ -168,7 +168,7 @@ def test_timeout_error(client: HttpFoundryClient) -> None:
         client.submit_for_review(draft_id, "minor")
 
 
-@respx.mock  # type: ignore[misc]
+@respx.mock
 def test_network_error(client: HttpFoundryClient) -> None:
     draft_id = "draft-net-error"
 
@@ -196,7 +196,7 @@ def test_missing_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
         HttpFoundryClient(config)
 
 
-@respx.mock  # type: ignore[misc]
+@respx.mock
 def test_post_unexpected_exception(client: HttpFoundryClient) -> None:
     # Test unexpected exception in _post, catching generic Exception
     # We can mock httpx.Client to raise something unexpected
@@ -218,7 +218,7 @@ def test_post_unexpected_exception(client: HttpFoundryClient) -> None:
             client.submit_for_review(draft_id, type_)
 
 
-@respx.mock  # type: ignore[misc]
+@respx.mock
 def test_get_draft_status_unexpected_exception(client: HttpFoundryClient) -> None:
     draft_id = "draft-unexpected"
 
@@ -227,7 +227,7 @@ def test_get_draft_status_unexpected_exception(client: HttpFoundryClient) -> Non
             client.get_draft_status(draft_id)
 
 
-@respx.mock  # type: ignore[misc]
+@respx.mock
 def test_get_draft_status_runtime_error_reraise(client: HttpFoundryClient) -> None:
     # Ensure RuntimeErrors raised inside get_draft_status are re-raised without wrapping
     draft_id = "draft-reraise"
@@ -242,7 +242,7 @@ def test_get_draft_status_runtime_error_reraise(client: HttpFoundryClient) -> No
 # --- Edge Cases and Complex Scenarios ---
 
 
-@respx.mock  # type: ignore[misc]
+@respx.mock
 def test_url_encoding(client: HttpFoundryClient) -> None:
     """Test that draft IDs with special characters are correctly encoded."""
     draft_id = "group/project/draft#1"
@@ -276,7 +276,7 @@ def test_malformed_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
         client.get_draft_status("123")
 
 
-@respx.mock  # type: ignore[misc]
+@respx.mock
 def test_status_type_conversion(client: HttpFoundryClient) -> None:
     """Test handling of non-string status values."""
     draft_id = "123"
@@ -294,7 +294,7 @@ def test_status_type_conversion(client: HttpFoundryClient) -> None:
     assert client.get_draft_status(draft_id) == "None"
 
 
-@respx.mock  # type: ignore[misc]
+@respx.mock
 def test_empty_arguments(client: HttpFoundryClient) -> None:
     """Test calling methods with empty strings."""
     draft_id = ""
@@ -307,7 +307,7 @@ def test_empty_arguments(client: HttpFoundryClient) -> None:
         client.submit_for_review(draft_id, "minor")
 
 
-@respx.mock  # type: ignore[misc]
+@respx.mock
 def test_reject_release(client: HttpFoundryClient) -> None:
     draft_id = "draft-123"
     reason = "Bad code"
@@ -327,7 +327,7 @@ def test_reject_release(client: HttpFoundryClient) -> None:
     assert json.loads(req.content) == {"reason": reason}
 
 
-@respx.mock  # type: ignore[misc]
+@respx.mock
 def test_reject_release_not_found(client: HttpFoundryClient) -> None:
     draft_id = "draft-missing"
     encoded_draft_id = "draft-missing"
@@ -340,7 +340,7 @@ def test_reject_release_not_found(client: HttpFoundryClient) -> None:
         client.reject_release(draft_id, "reason")
 
 
-@respx.mock  # type: ignore[misc]
+@respx.mock
 def test_reject_release_conflict(client: HttpFoundryClient) -> None:
     """Test 409 Conflict (e.g. draft already unlocked)."""
     draft_id = "draft-locked"
